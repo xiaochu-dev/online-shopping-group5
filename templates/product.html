@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<!-- 买家界面 —— 商品与意向模块：黄程宇 FR-02 / FR-03（Backlog B/C）；口令码展示区块：周到（FR-04） -->
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>商品详情 · 在线购物系统</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header class="topbar">
+        <span class="brand">在线购物系统</span>
+        <nav class="topnav">
+            <a href="/product">刷新</a>
+        </nav>
+    </header>
+
+    <main class="container container-narrow">
+        <!-- 提交成功 · 口令码当场显示（FR-03-8） -->
+        <!-- 口令码展示区块 —— 周到（PM）：FR-04，凭码可撤销意向 -->
+        {% if token_display %}
+        <div class="banner banner-ok token-banner">
+            <p>意向提交成功！</p>
+            <p>你的口令码：<strong class="token-code">{{ token_display }}</strong></p>
+            <p class="muted">请牢记此口令码，凭它可在下方撤销本意向（仅限排队中状态）。</p>
+        </div>
+        {% endif %}
+
+        {% if notice %}
+        <div class="banner banner-ok">{{ notice }}</div>
+        {% endif %}
+
+        {% if error %}
+        <div class="banner banner-error">{{ error }}</div>
+        {% endif %}
+
+        {% if product %}
+        <!-- 商品详情 -->
+        <section class="card">
+            <div class="product-row">
+                <img class="thumb thumb-large" src="/static/{{ product.image_path }}" alt="商品图">
+                <div class="product-info">
+                    <h2>{{ product.name }}</h2>
+                    <p class="muted">{% if product.description %}{{ product.description }}{% else %}（卖家未填写描述）{% endif %}</p>
+                    <p class="price">￥{{ product.price | price }}</p>
+                    {% if product.status == 'on_sale' %}
+                        <span class="tag tag-green">在售</span>
+                    {% elif product.status == 'frozen' %}
+                        <span class="tag tag-red">商品交易中</span>
+                    {% endif %}
+                </div>
+            </div>
+        </section>
+
+        <!-- 提交意向：仅「在售」可提交；已冻结显示「商品交易中」且不收新意向 -->
+        <section class="card">
+            {% if product.status == 'on_sale' %}
+            <h3>提交购买意向</h3>
+            <p class="muted">填写姓名与联系电话（两项均必填），提交成功后将获得口令码。</p>
+            <form method="post" action="/product/intent">
+                <div class="form-row">
+                    <label for="buyer_name">姓名 <span class="req">*</span></label>
+                    <input type="text" id="buyer_name" name="buyer_name" required>
+                </div>
+                <div class="form-row">
+                    <label for="phone">联系电话 <span class="req">*</span></label>
+                    <input type="text" id="phone" name="phone" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">我要买</button>
+            </form>
+            {% else %}
+            <p class="frozen-tip">商品交易中</p>
+            <p class="muted">当前商品处于交易/冻结状态，暂不接受新的购买意向。</p>
+            {% endif %}
+        </section>
+        {% else %}
+        <section class="card">
+            <p class="empty-tip">暂无商品在售</p>
+        </section>
+        {% endif %}
+
+        <!-- 凭口令码撤销意向（D-3 / FR-04-4） -->
+        <section class="card">
+            <h3>凭口令码撤销意向</h3>
+            <p class="muted">输入提交意向时获得的口令码，可撤销尚在排队中的意向。</p>
+            <form method="post" action="/cancel" class="cancel-form">
+                <div class="form-row">
+                    <label for="token_code">口令码</label>
+                    <input type="text" id="token_code" name="token_code" required>
+                </div>
+                <button type="submit" class="btn btn-danger">撤销意向</button>
+            </form>
+        </section>
+    </main>
+</body>
+</html>

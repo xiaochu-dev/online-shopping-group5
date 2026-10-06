@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<!-- 卖家登录页 —— 卖家后台模块：胡成溯（组长）FR-01 -->
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>卖家登录 · 在线购物系统</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="center-page">
+    <div class="card card-narrow">
+        <h1>在线购物系统</h1>
+        <p class="subtitle">卖家后台登录</p>
+
+        {% if error %}
+        <div class="banner banner-error">{{ error }}</div>
+        {% endif %}
+
+        <form method="post" action="/login">
+            <div class="form-row">
+                <label for="username">用户名</label>
+                <input type="text" id="username" name="username" required autofocus>
+            </div>
+            <div class="form-row">
+                <label for="password">密码</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">登录</button>
+        </form>
+    </div>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<!-- 历史商品详情 —— 卖家后台模块：胡成溯（组长）FR-08（Backlog H） -->
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>历史商品详情 · 卖家后台</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header class="topbar">
+        <span class="brand">在线购物系统 · 卖家后台</span>
+        <nav class="topnav">
+            <a href="/admin">后台首页</a>
+            <a href="/admin/history">历史商品</a>
+        </nav>
+    </header>
+
+    <main class="container">
+        <!-- 商品级保留字段（FR-08-3）：名称、描述、图片、价格、发布时间、最终结果、交易时间 -->
+        <section class="card">
+            <h2>历史商品详情</h2>
+            <div class="product-row">
+                <img class="thumb" src="/static/{{ product.image_path }}" alt="商品图">
+                <div class="product-info">
+                    <p class="product-name">{{ product.name }}</p>
+                    <p class="muted">{% if product.description %}{{ product.description }}{% else %}（无描述）{% endif %}</p>
+                    <p class="price">￥{{ product.price | price }}</p>
+                    <p class="muted">发布时间：{{ product.published_at }}</p>
+                    <p class="muted">交易时间：{{ product.traded_at }}</p>
+                    <p>
+                        最终结果：
+                        {% if product.final_result == '成功' %}
+                            <span class="tag tag-green">成功</span>
+                        {% else %}
+                            <span class="tag tag-red">{{ product.final_result or '—' }}</span>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 意向人级保留字段（FR-08-5）：姓名、电话、提交时间、每人交易结果；历史只读（FR-08-6） -->
+        <section class="card">
+            <h2>意向购买人列表（按提交时间正序）</h2>
+            {% if intents %}
+            <table class="table">
+                <thead>
+                <tr>
+                    <th>序位</th>
+                    <th>姓名</th>
+                    <th>联系电话</th>
+                    <th>提交时间</th>
+                    <th>交易结果</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for item in intents %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ item.buyer_name }}</td>
+                    <td>{{ item.phone }}</td>
+                    <td>{{ item.created_at }}</td>
+                    <td>
+                        {% if item.status == 'success' %}
+                            <span class="tag tag-green">成功</span>
+                        {% elif item.status == 'failed' %}
+                            <span class="tag tag-red">失败</span>
+                        {% elif item.status == 'cancelled' %}
+                            <span class="tag tag-gray">已撤销</span>
+                        {% else %}
+                            <span class="tag tag-gray">{{ item.status }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="muted">该商品没有意向记录。</p>
+            {% endif %}
+            <p class="muted">历史记录只读，不提供修改与删除。</p>
+        </section>
+    </main>
+</body>
+</html>

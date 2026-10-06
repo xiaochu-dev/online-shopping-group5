@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.pyc
+
+# 运行时数据（本地库与上传文件不入库）
+*.db
+static/uploads/
+
+# IDE
+.idea/
+.vscode/

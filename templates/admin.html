@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<!-- 卖家后台界面 —— 卖家后台模块：胡成溯（组长）FR-01 / FR-05 / FR-07 / FR-08（含冻结/解冻开关） -->
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>卖家后台 · 在线购物系统</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header class="topbar">
+        <span class="brand">在线购物系统 · 卖家后台</span>
+        <nav class="topnav">
+            <a href="/admin">后台首页</a>
+            <a href="/admin/history">历史商品</a>
+            <a href="/product" target="_blank">买家页</a>
+        </nav>
+    </header>
+
+    <main class="container">
+        {% if msg %}<div class="banner banner-ok">{{ msg }}</div>{% endif %}
+        {% if error %}<div class="banner banner-error">{{ error }}</div>{% endif %}
+
+        <!-- 当前商品 -->
+        <section class="card">
+            <h2>当前商品</h2>
+            {% if product %}
+            <div class="product-row">
+                <img class="thumb" src="/static/{{ product.image_path }}" alt="商品图">
+                <div class="product-info">
+                    <p class="product-name">{{ product.name }}</p>
+                    <p class="muted">{% if product.description %}{{ product.description }}{% else %}（无描述）{% endif %}</p>
+                    <p class="price">￥{{ product.price | price }}</p>
+                    <p>
+                        状态：
+                        {% if product.status == 'on_sale' %}
+                            <span class="tag tag-green">在售</span>
+                        {% elif product.status == 'frozen' %}
+                            <span class="tag tag-red">已冻结</span>
+                        {% endif %}
+                        发布时间：{{ product.published_at }}
+                    </p>
+                </div>
+            </div>
+            {% else %}
+            <p class="muted">暂无在售/冻结商品，请发布新商品。</p>
+            {% endif %}
+        </section>
+
+        {% if product %}
+        <!-- 冻结 / 解冻开关 + 标记结果 -->
+        <section class="card action-card">
+            <div class="action-block">
+                <h3>冻结 / 解冻开关</h3>
+                <p class="muted">手动冻结与自动冻结是同一状态；冻结期间买家页显示「商品交易中」，不接收新意向。</p>
+                {% if product.status == 'on_sale' %}
+                <form method="post" action="/admin/product/freeze" class="inline-form">
+                    <button type="submit" class="btn btn-warning">手动冻结</button>
+                </form>
+                {% elif product.status == 'frozen' %}
+                <form method="post" action="/admin/product/unfreeze" class="inline-form">
+                    <button type="submit" class="btn btn-success" {% if trading %}disabled title="交易进行中，请先标记结果"{% endif %}>手动解冻</button>
+                </form>
+                {% endif %}
+            </div>
+            <div class="action-block">
+                <h3>标记交易结果</h3>
+                {% if trading %}
+                <p>当前交易中买家：<strong>{{ head_intent.buyer_name }}</strong>（{{ head_intent.phone }}）</p>
+                <form method="post" action="/admin/product/mark" class="inline-form">
+                    <input type="hidden" name="result" value="success">
+                    <button type="submit" class="btn btn-success">标记成功</button>
+                </form>
+                <form method="post" action="/admin/product/mark" class="inline-form">
+                    <input type="hidden" name="result" value="fail">
+                    <button type="submit" class="btn btn-danger">标记失败</button>
+                </form>
+                {% else %}
+                <p class="muted">当前没有进行中的交易；选定队首买家「进入交易」后可标记结果。</p>
+                {% endif %}
+            </div>
+        </section>
+
+        <!-- 意向购买人列表 -->
+        <section class="card">
+            <h2>意向购买人列表（按提交时间正序）</h2>
+            {% if queue or trading %}
+            <table class="table">
+                <thead>
+                <tr>
+                    <th>序位</th>
+                    <th>姓名</th>
+                    <th>联系电话</th>
+                    <th>提交时间</th>
+                    <th>状态</th>
+                    <th>操作</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for item in queue %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ item.buyer_name }}</td>
+                    <td>{{ item.phone }}</td>
+                    <td>{{ item.created_at }}</td>
+                    <td>
+                        {% if item.status == 'trading' %}
+                            <span class="tag tag-blue">交易中</span>
+                        {% else %}
+                            <span class="tag tag-gray">排队中</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.status == 'pending' and loop.index == 1 and not trading %}
+                        <form method="post" action="/admin/intent/{{ item.id }}/enter" class="inline-form">
+                            <button type="submit" class="btn btn-primary btn-sm">进入交易</button>
+                        </form>
+                        {% elif item.status == 'trading' %}
+                            <span class="muted">交易进行中</span>
+                        {% else %}
+                            <button type="button" class="btn btn-sm" disabled>进入交易</button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            <p class="muted">队列规则：严格先到先得，仅队首可进入交易；队首失败后下一位自动递补。</p>
+            {% else %}
+            <p class="muted">暂无有效意向。</p>
+            {% endif %}
+        </section>
+        {% endif %}
+
+        <!-- 发布商品表单 -->
+        <section class="card">
+            <h2>发布商品</h2>
+            <p class="muted">同一时间仅允许一件「在售/已冻结」商品；名称、价格必填；图片 JPG/PNG 且 ≤5MB，不传则使用占位图。</p>
+            {% if not product %}
+            <form method="post" action="/admin/product" enctype="multipart/form-data">
+                <div class="form-row">
+                    <label for="name">名称 <span class="req">*</span></label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+                <div class="form-row">
+                    <label for="description">描述</label>
+                    <textarea id="description" name="description" rows="3"></textarea>
+                </div>
+                <div class="form-row">
+                    <label for="image">图片（JPG/PNG，≤5MB，可选）</label>
+                    <input type="file" id="image" name="image" accept="image/jpeg,image/png">
+                </div>
+                <div class="form-row">
+                    <label for="price">价格（元）<span class="req">*</span></label>
+                    <input type="number" id="price" name="price" step="0.01" min="0.01" required>
+                </div>
+                <button type="submit" class="btn btn-primary">发布商品</button>
+            </form>
+            {% else %}
+            <p class="muted">当前已有在售/冻结商品，发布新商品前需先完成交易或使其下架。</p>
+            {% endif %}
+        </section>
+
+        <!-- 修改密码 -->
+        <section class="card">
+            <h2>修改密码</h2>
+            <p class="muted">需校验原密码；新密码长度不少于 8 位。（本版本不提供退出登录）</p>
+            <form method="post" action="/admin/change_password">
+                <div class="form-row">
+                    <label for="old_password">原密码</label>
+                    <input type="password" id="old_password" name="old_password" required>
+                </div>
+                <div class="form-row">
+                    <label for="new_password">新密码（≥8 位）</label>
+                    <input type="password" id="new_password" name="new_password" required minlength="8">
+                </div>
+                <button type="submit" class="btn btn-primary">确认修改</button>
+            </form>
+        </section>
+    </main>
+</body>
+</html>
