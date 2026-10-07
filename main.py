@@ -9,6 +9,9 @@ main.py —— FastAPI 应用入口 + 全部路由
     # 卖家后台模块 —— 胡成溯（组长）：FR-01 / FR-05 / FR-07 / FR-08（Backlog A/E/F(开关)/G/H）
 - 商品发布、买家浏览/提交意向路由
     # 商品与意向模块 —— 黄程宇：FR-02 / FR-03（Backlog B/C）
+    # ↑ 完善记录（黄程宇，2026-10-07）：图片上传增加服务端严格校验（FR-02-6 细化）——
+    #   文件头魔数校验（JPEG: FF D8 FF / PNG: 89 50 4E 47 0D 0A 1A 0A，防伪造后缀）+
+    #   扩展名白名单（.jpg/.jpeg/.png）双重校验 + 大小 ≤5MB + 空文件拒绝，校验失败不落盘
 - 口令码、队列排序、撤销、递补核心函数（位于 services_state.py）
     # 队列与冻结模块 —— 周到（PM）：FR-04 / FR-06（Backlog D/F）
 
@@ -36,7 +39,10 @@ UPLOAD_DIR = BASE_DIR / "static" / "uploads"
 PLACEHOLDER_PATH = BASE_DIR / "static" / "placeholder.png"
 
 MAX_IMAGE_BYTES = 5 * 1024 * 1024  # 5MB（FR-02-6）
-ALLOWED_IMAGE_TYPES = {"image/jpeg": ".jpg", "image/png": ".png"}
+# 扩展名白名单（FR-02-6）：与文件头魔数双重校验，防伪造后缀
+ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
+JPEG_MAGIC = b"\xff\xd8\xff"                       # JPEG 文件头前 3 字节
+PNG_MAGIC = b"\x89\x50\x4e\x47\x0d\x0a\x1a\x0a"    # PNG 文件头 8 字节
 
 app = FastAPI(title="在线购物系统 MVP - 第5组", docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -192,16 +198,23 @@ async def publish_product(
         if state.get_current_product(conn) is not None:
             return fail("已存在在售/冻结商品，同一时间仅允许一件，请先完成或下架当前商品")
 
-        # 图片校验（可选）：JPG/PNG，≤5MB
+        # 图片校验（可选，FR-02-6 服务端严格校验）：
+        # 空文件拒绝 → 大小 ≤5MB → 扩展名白名单 → 文件头魔数（防伪造后缀）；
+        # 校验失败不落盘、直接返回 303 回后台并带中文错误提示
         image_path = str(PLACEHOLDER_PATH.name)  # 未上传 → 占位图
         if image is not None and image.filename:
-            content_type = (image.content_type or "").lower()
-            ext = ALLOWED_IMAGE_TYPES.get(content_type)
-            if ext is None:
-                return fail("图片仅支持 JPG/PNG 格式")
             data = await image.read()
+            if not data:
+                return fail("上传的图片文件为空，请重新选择图片")
             if len(data) > MAX_IMAGE_BYTES:
-                return fail("图片大小超过 5MB 上限")
+                return fail("图片大小不能超过 5MB")
+            ext = Path(image.filename).suffix.lower()
+            if ext not in ALLOWED_IMAGE_EXTS:
+                return fail("图片仅支持 JPG/PNG 格式")
+            is_jpeg = data[:3] == JPEG_MAGIC
+            is_png = data[:8] == PNG_MAGIC
+            if (ext in (".jpg", ".jpeg") and not is_jpeg) or (ext == ".png" and not is_png):
+                return fail("图片内容与扩展名不符，仅支持真实的 JPG/PNG 文件")
             UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
             save_name = f"{uuid.uuid4().hex}{ext}"
             (UPLOAD_DIR / save_name).write_bytes(data)

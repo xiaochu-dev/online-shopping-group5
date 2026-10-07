@@ -133,26 +133,36 @@
         {% endif %}
 
         <!-- 发布商品表单 -->
+        <!-- 发布表单区块美化（黄程宇，2026-10-07）：字段分组 + 必填星号；name 与 action 未改动 -->
         <section class="card">
             <h2>发布商品</h2>
             <p class="muted">同一时间仅允许一件「在售/已冻结」商品；名称、价格必填；图片 JPG/PNG 且 ≤5MB，不传则使用占位图。</p>
             {% if not product %}
             <form method="post" action="/admin/product" enctype="multipart/form-data">
-                <div class="form-row">
-                    <label for="name">名称 <span class="req">*</span></label>
-                    <input type="text" id="name" name="name" required>
+                <div class="form-section">
+                    <p class="form-section-title">基本信息</p>
+                    <div class="form-row">
+                        <label for="name">名称 <span class="req">*</span></label>
+                        <input type="text" id="name" name="name" placeholder="必填：商品名称" required>
+                    </div>
+                    <div class="form-row">
+                        <label for="description">描述 <span class="muted">（可选，可留空）</span></label>
+                        <textarea id="description" name="description" rows="3" placeholder="选填：商品描述"></textarea>
+                    </div>
                 </div>
-                <div class="form-row">
-                    <label for="description">描述</label>
-                    <textarea id="description" name="description" rows="3"></textarea>
+                <div class="form-section">
+                    <p class="form-section-title">商品图片</p>
+                    <div class="form-row">
+                        <label for="image">图片 <span class="muted">（可选，JPG/PNG，≤5MB，不传使用占位图）</span></label>
+                        <input type="file" id="image" name="image" accept="image/jpeg,image/png">
+                    </div>
                 </div>
-                <div class="form-row">
-                    <label for="image">图片（JPG/PNG，≤5MB，可选）</label>
-                    <input type="file" id="image" name="image" accept="image/jpeg,image/png">
-                </div>
-                <div class="form-row">
-                    <label for="price">价格（元）<span class="req">*</span></label>
-                    <input type="number" id="price" name="price" step="0.01" min="0.01" required>
+                <div class="form-section">
+                    <p class="form-section-title">定价</p>
+                    <div class="form-row">
+                        <label for="price">价格（元） <span class="req">*</span></label>
+                        <input type="number" id="price" name="price" step="0.01" min="0.01" placeholder="必填：如 9.90" required>
+                    </div>
                 </div>
                 <button type="submit" class="btn btn-primary">发布商品</button>
             </form>
