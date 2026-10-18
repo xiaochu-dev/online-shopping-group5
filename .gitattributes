@@ -1,0 +1,30 @@
+# ==========================================================================
+# 换行符统一策略
+# --------------------------------------------------------------------------
+# 背景：Windows 上 git 默认 core.autocrlf=true，拉代码时会把 LF 换成 CRLF。
+# 这会让 mvnw（POSIX shell 脚本）带上 \r，在 Git Bash 里执行报
+#   "./mvnw: /bin/sh^M: bad interpreter: No such file or directory"
+# 因此这里显式规定：除了 .bat/.cmd，其余文本文件在工作区一律 LF。
+#
+# 命令参考：git config --get core.autocrlf   （本机为 true）
+# ==========================================================================
+
+# 默认：自动识别文本文件，工作区用 LF
+*       text=auto eol=lf
+
+# Windows 批处理必须是 CRLF，否则 cmd.exe 解析 goto/label 会出错
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# shell 脚本必须 LF（mvnw 是 Maven Wrapper 的 POSIX 脚本）
+*.sh    text eol=lf
+mvnw    text eol=lf
+
+# 二进制文件不做换行符转换
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.ico   binary
+*.jar   binary
+*.zip   binary
+*.db    binary

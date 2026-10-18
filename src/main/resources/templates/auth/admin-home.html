@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<!-- 后台首页 —— 平台基座：胡成溯（组长）T2-01 ~ T2-06 -->
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('后台首页')}"></head>
+<body>
+<div th:replace="~{fragments/layout :: topbar('home')}"></div>
+
+<div class="container">
+
+    <!-- 操作反馈：与全项目约定一致（?msg=成功 / ?error=失败） -->
+    <div class="banner banner-ok" th:if="${msg}" th:text="${msg}"></div>
+    <div class="banner banner-error" th:if="${error}" th:text="${error}"></div>
+
+    <div class="card">
+        <h2>当前账号</h2>
+        <p>登录用户名：<b th:text="${username}">admin</b></p>
+        <p class="muted">
+            账号创建于 <span th:text="${sellerCreatedAt}">2026-10-18</span>
+            · 登录状态有效期 7 天，超时后需重新登录
+        </p>
+    </div>
+
+    <div class="card">
+        <h2>数据概览</h2>
+        <div class="stat-grid">
+            <div class="stat-card">
+                <div class="stat-num" th:text="${categoryCount}">0</div>
+                <div class="stat-label">商品分类</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num" th:text="${productOnSale}">0</div>
+                <div class="stat-label">在售商品</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num" th:text="${productDelisted}">0</div>
+                <div class="stat-label">已下架商品</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num" th:text="${intentPending}">0</div>
+                <div class="stat-label">排队意向</div>
+            </div>
+        </div>
+        <p class="muted" style="margin-top: 12px;">
+            商品总数共 <b th:text="${productTotal}">0</b> 件，购买意向共
+            <b th:text="${intentTotal}">0</b> 条。数字直接来自数据库，可据此确认基座与数据层已连通。
+        </p>
+    </div>
+
+    <div class="card">
+        <h2>模块接入状态</h2>
+        <table class="table">
+            <thead>
+            <tr>
+                <th>模块</th>
+                <th>负责人</th>
+                <th>代码包</th>
+                <th>入口</th>
+                <th>状态</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>平台基座与账号</td>
+                <td>胡成溯</td>
+                <td><code>common/</code>、<code>auth/</code></td>
+                <td><code>/admin</code></td>
+                <td><span class="tag tag-green">已交付（T2-01 ~ T2-06）</span></td>
+            </tr>
+            <tr>
+                <td>商品中心</td>
+                <td>黄程宇</td>
+                <td><code>product/</code></td>
+                <td><code>/admin/products</code></td>
+                <td><span class="tag tag-orange">开发中（T2-07 ~ T2-10）</span></td>
+            </tr>
+            <tr>
+                <td>买家门户与交易</td>
+                <td>周到</td>
+                <td><code>portal/</code></td>
+                <td><code>/</code></td>
+                <td><span class="tag tag-orange">开发中（T2-11 ~ T2-14）</span></td>
+            </tr>
+            </tbody>
+        </table>
+        <p class="muted">
+            两位同学按 <code>docs/API契约-迭代2.md</code> 并行编码，接入后把对应行的状态改为「已接入」即可。
+        </p>
+    </div>
+
+    <div class="card">
+        <h2>修改密码</h2>
+        <form method="post" th:action="@{/admin/password}" class="form-narrow">
+            <div class="form-row">
+                <label for="oldPassword">原密码 <span class="req">*</span></label>
+                <input type="password" id="oldPassword" name="oldPassword"
+                       autocomplete="current-password" required>
+            </div>
+            <div class="form-row">
+                <label for="newPassword">新密码 <span class="req">*</span></label>
+                <input type="password" id="newPassword" name="newPassword"
+                       autocomplete="new-password" minlength="8" required>
+            </div>
+            <div class="form-row">
+                <label for="confirmPassword">确认新密码 <span class="req">*</span></label>
+                <input type="password" id="confirmPassword" name="confirmPassword"
+                       autocomplete="new-password" minlength="8" required>
+            </div>
+            <button type="submit" class="btn btn-primary">保存新密码</button>
+        </form>
+        <p class="muted" style="margin-top: 10px;">
+            规则：必须验证原密码；新密码不少于 8 位；新密码不能与原密码相同。修改成功后原密码立即失效。
+        </p>
+    </div>
+
+</div>
+</body>
+</html>

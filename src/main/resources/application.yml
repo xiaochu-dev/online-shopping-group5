@@ -1,0 +1,69 @@
+# ==========================================================================
+# 第 5 组 在线购物系统 · 迭代 2 配置
+# 负责人：胡成溯（组长）T2-01 / T2-02
+# ==========================================================================
+
+server:
+  port: 8080
+  servlet:
+    session:
+      # FR-01：登录后 7 天内免重复登录（与迭代 1 的 cookie 有效期保持一致）
+      timeout: 7d
+      cookie:
+        name: SHOP_SESSION
+        http-only: true
+        same-site: lax
+
+spring:
+  application:
+    name: online-shopping-group5
+
+  # ------------------------------------------------------------------
+  # T2-02 SQLite 数据源
+  # ------------------------------------------------------------------
+  datasource:
+    driver-class-name: org.sqlite.JDBC
+    url: jdbc:sqlite:./data/shop.db
+    hikari:
+      # SQLite 同一时刻只允许一个写事务（单写锁）。
+      # 连接池固定为 1，可把并发写请求串行化，避免 SQLITE_BUSY 报错。
+      # 课程演示的数据量下性能完全够用，且天然满足 NFR-02/NFR-03。
+      maximum-pool-size: 1
+      minimum-idle: 1
+      pool-name: sqlite-pool
+      # 每个新连接都要打开外键约束（SQLite 默认关闭，且该开关不随文件持久化）
+      connection-init-sql: PRAGMA foreign_keys = ON
+
+  # ------------------------------------------------------------------
+  # T2-03 建表脚本：每次启动执行，全部 IF NOT EXISTS，可重复执行
+  # ------------------------------------------------------------------
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+      encoding: UTF-8
+      continue-on-error: false
+
+  thymeleaf:
+    cache: false
+    encoding: UTF-8
+    mode: HTML
+
+# ------------------------------------------------------------------
+# T2-02 MyBatis-Plus
+# ------------------------------------------------------------------
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true   # sold_price -> soldPrice 这类自动映射
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto              # 与 SQLite AUTOINCREMENT 对应
+      table-underline: true
+
+logging:
+  level:
+    root: INFO
+    com.group5.shop: DEBUG
+    com.group5.shop.common.mapper: DEBUG

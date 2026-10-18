@@ -1,0 +1,33 @@
+# ===== Maven =====
+target/
+.mvn/timing.properties
+
+# ===== 运行期产物（不要提交）=====
+# SQLite 数据库文件：每人本地跑出来各自一份，互不影响
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# 后台上传的商品图片：属于运行期数据，不进版本库
+uploads/
+
+# ===== IDE =====
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.classpath
+.project
+out/
+
+# ===== 系统 =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== 日志 =====
+*.log
+logs/
