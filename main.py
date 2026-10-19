@@ -309,7 +309,7 @@ async def admin_page(request: Request, msg: str = "", error: str = ""):
         head = None
         trading = False
         if product is not None:
-            queue = state.list_queue(conn, product["id"])
+            queue = state.list_queue(conn, product["id"], include_trading=True)
             head = state.get_head_intent(conn, product["id"])
             trading = head is not None
     finally:
