@@ -1,0 +1,91 @@
+name: CI and Docker Image
+
+# 触发条件：
+#   1) 推送到 main 分支（构建基线版本镜像）
+#   2) 手动点击 Run workflow
+#   3) 推送 tag（如 baseline-v1.0，产物还带 tag 名）
+on:
+  push:
+    branches: [main]
+    tags: ["baseline-*", "v*"]
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: ghcr.io/xiaochu-dev/online-shopping-group5
+
+jobs:
+  # 第一关：跑 4 套自动化用例（共 72 项），不通过就不出镜像
+  test:
+    name: Run automated tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Smoke test (30 cases)
+        run: python test_smoke.py
+
+      - name: Module B test (18 cases)
+        run: python test_b_module.py
+
+      - name: Module D test (10 cases)
+        run: python test_d_module.py
+
+      - name: Cross review test (14 cases)
+        run: python test_cross_review.py
+
+  # 第二关：构建镜像并推送到 GitHub Container Registry
+  build-and-push:
+    name: Build and push image
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=baseline-v1.0
+            type=sha,prefix=sha-
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          echo "### Image pushed" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "Pull: docker pull ${{ env.IMAGE_NAME }}:baseline-v1.0" >> $GITHUB_STEP_SUMMARY

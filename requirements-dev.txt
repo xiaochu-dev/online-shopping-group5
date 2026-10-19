@@ -1,0 +1,5 @@
+# 测试专用依赖（运行 test_smoke.py 等自动化用例时需要，生产镜像不安装）
+# 说明：fastapi 0.142.2 依赖的新版 starlette 把 TestClient 的 HTTP 客户端换成了 httpx2，
+#      缺少该包会抛 "requires the httpx2 package to be installed"。
+-r requirements.txt
+httpx2==2.14.0

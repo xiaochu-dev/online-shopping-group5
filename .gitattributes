@@ -1,0 +1,13 @@
+# 统一换行符，避免 Windows 下 autocrlf 把 Dockerfile / 工作流转成 CRLF 导致构建失败
+* text=auto
+
+Dockerfile      text eol=lf
+*.sh            text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+*.py            text eol=lf
+requirements*.txt text eol=lf
+.dockerignore   text eol=lf
+
+*.bat           text eol=crlf
+*.cmd           text eol=crlf

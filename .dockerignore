@@ -1,0 +1,29 @@
+# 版本库与本地环境
+.git
+.gitignore
+.gitattributes
+.github
+
+# 本地虚拟环境
+venv
+.venv
+env
+
+# Python 缓存
+__pycache__
+*.py[cod]
+*.egg-info
+
+# 运行时数据（数据库与上传图片不进镜像）
+*.db
+*.db-wal
+*.db-shm
+shop.db*
+
+# 构建产物
+dist
+*.zip
+
+# 编辑器
+.idea
+.vscode
