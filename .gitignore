@@ -2,6 +2,11 @@
 __pycache__/
 *.pyc
 
+# 虚拟环境（build.bat 会自动创建 .venv）
+.venv/
+venv/
+env/
+
 # 运行时数据（本地库与上传文件不入库）
 *.db
 static/uploads/
