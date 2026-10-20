@@ -26,6 +26,7 @@
     <nav class="topnav">
         <a th:href="@{/admin}" th:classappend="${active == 'home'} ? 'nav-active' : ''">后台首页</a>
         <a th:href="@{/admin/diagnostics}" th:classappend="${active == 'diagnostics'} ? 'nav-active' : ''">基座自检</a>
+        <a th:href="@{/admin/customers}" th:classappend="${active == 'customers'} ? 'nav-active' : ''">客户管理</a>
         <a th:href="@{/}" th:classappend="${active == 'portal'} ? 'nav-active' : ''">买家门户</a>
         <a th:href="@{/logout}" class="nav-logout">退出登录</a>
     </nav>

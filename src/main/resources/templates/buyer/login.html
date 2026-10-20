@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<!-- 买家登录页 —— 账号与客户模块：胡成溯（组长）T2-03 / 挑战需求 A.2.1 -->
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('买家登录')}"></head>
+<body class="center-page">
+<div class="card card-narrow">
+    <h1>买家登录</h1>
+    <p class="subtitle">浏览商品无需登录，提交购买意向需要先登录</p>
+
+    <div class="banner banner-ok" th:if="${msg}" th:text="${msg}">注册成功，请使用新账号登录</div>
+    <div class="banner banner-error" th:if="${error}" th:text="${error}">用户名或密码错误</div>
+
+    <form method="post" th:action="@{/buyer/login}">
+        <!-- 登录成功后跳回的地址；只允许站内路径，已在 Controller 校验 -->
+        <input type="hidden" name="redirect" th:value="${redirect}">
+
+        <div class="form-row">
+            <label for="username">用户名</label>
+            <input type="text" id="username" name="username" autocomplete="username"
+                   required autofocus th:value="${username}">
+        </div>
+        <div class="form-row">
+            <label for="password">密码</label>
+            <input type="password" id="password" name="password"
+                   autocomplete="current-password" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">登录</button>
+    </form>
+
+    <p class="muted login-tip">
+        还没有账号？<a th:href="@{/buyer/register}">立即注册</a>
+    </p>
+</div>
+</body>
+</html>

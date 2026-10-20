@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<!-- 客户详情 —— 账号与客户模块：胡成溯（组长）T2-05 / 挑战需求 A.2.3 -->
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('客户详情')}"></head>
+<body>
+<div th:replace="~{fragments/layout :: topbar('customers')}"></div>
+
+<div class="container">
+
+    <p style="margin-bottom: 12px;">
+        <a class="btn btn-sm" th:href="@{/admin/customers}">← 返回客户列表</a>
+    </p>
+
+    <div class="card">
+        <h2>客户信息</h2>
+        <table class="table">
+            <tbody>
+            <tr>
+                <th style="width: 160px;">客户 ID</th>
+                <td th:text="${buyer.id}">1</td>
+            </tr>
+            <tr>
+                <th>用户名</th>
+                <td th:text="${buyer.username}">buyer01</td>
+            </tr>
+            <tr>
+                <th>联系电话</th>
+                <td th:text="${buyer.phone}">13800000000</td>
+            </tr>
+            <tr>
+                <th>默认交易地点</th>
+                <td th:text="${buyer.defaultPlace != null ? buyer.defaultPlace : '未填写'}">图书馆门口</td>
+            </tr>
+            <tr>
+                <th>注册时间</th>
+                <td th:text="${#dates.format(new java.util.Date(buyer.createdAt), 'yyyy-MM-dd HH:mm')}">2026-10-20 22:00</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>购买历史</h2>
+
+        <div class="empty-tip" th:if="${!historyReady}">
+            交易模块（portal）尚未接入购买历史查询，暂无数据可显示。<br>
+            接入后本区将列出该客户每一次已结束的订单及其结果（成功 / 失败、失败原因）。
+        </div>
+
+        <div class="empty-tip" th:if="${historyReady and #lists.isEmpty(history)}">
+            该客户注册后还没有已结束的订单。排队中与交易中的订单不计入购买历史。
+        </div>
+
+        <table class="table" th:if="${historyReady and !#lists.isEmpty(history)}">
+            <thead>
+            <tr>
+                <th>商品</th>
+                <th style="width: 150px;">下单时间</th>
+                <th style="width: 100px;">结果</th>
+                <th style="width: 150px;">交易时间</th>
+                <th>失败原因</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="h : ${history}">
+                <td th:text="${h.productName}">商品名</td>
+                <td th:text="${#dates.format(new java.util.Date(h.createdAt), 'yyyy-MM-dd HH:mm')}">2026-10-20 22:00</td>
+                <td>
+                    <span class="tag tag-green" th:if="${h.result == 'success'}">成功</span>
+                    <span class="tag tag-red" th:if="${h.result == 'failed'}">失败</span>
+                    <span class="tag tag-gray" th:if="${h.result != 'success' and h.result != 'failed'}"
+                          th:text="${h.result}">—</span>
+                </td>
+                <td th:text="${h.finishedAt != null ? #dates.format(new java.util.Date(h.finishedAt), 'yyyy-MM-dd HH:mm') : '—'}">—</td>
+                <td th:text="${h.failReason != null ? h.failReason : '—'}">—</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+</div>
+</body>
+</html>

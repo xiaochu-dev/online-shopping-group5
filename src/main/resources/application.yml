@@ -36,11 +36,21 @@ spring:
 
   # ------------------------------------------------------------------
   # T2-03 建表脚本：每次启动执行，全部 IF NOT EXISTS，可重复执行
+  # 迭代 2 起按模块拆成四个文件，按 00→01→02→03 顺序加载：
+  #   00-base 基础层（seller，胡成溯）
+  #   01-buyer 买家账号（胡成溯）
+  #   02-product 商品中心（黄程宇）
+  #   03-intent 意向与交易（周到）
+  # 顺序有意义：buyer → product → intent 之间存在外键依赖。
   # ------------------------------------------------------------------
   sql:
     init:
       mode: always
-      schema-locations: classpath:schema.sql
+      schema-locations:
+        - classpath:schema/00-base.sql
+        - classpath:schema/01-buyer.sql
+        - classpath:schema/02-product.sql
+        - classpath:schema/03-intent.sql
       encoding: UTF-8
       continue-on-error: false
 
@@ -66,4 +76,5 @@ logging:
   level:
     root: INFO
     com.group5.shop: DEBUG
-    com.group5.shop.common.mapper: DEBUG
+    com.group5.shop.product.domain: DEBUG
+    com.group5.shop.portal.domain: DEBUG

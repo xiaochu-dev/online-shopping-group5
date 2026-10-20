@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<!-- 买家中心 —— 账号与客户模块：胡成溯（组长）T2-03 -->
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('我的账号')}"></head>
+<body>
+
+<div class="topbar">
+    <span class="brand">在线购物系统 · 第 5 组</span>
+    <nav class="topnav">
+        <a th:href="@{/}">买家门户</a>
+        <a th:href="@{/my/orders}">我的订单</a>
+        <a th:href="@{/buyer/me}" class="nav-active">我的账号</a>
+        <a th:href="@{/buyer/logout}" class="nav-logout">退出登录</a>
+    </nav>
+</div>
+
+<div class="container">
+
+    <div class="card">
+        <h2>我的账号</h2>
+        <table class="table">
+            <tbody>
+            <tr>
+                <th style="width: 160px;">用户名</th>
+                <td th:text="${buyer.username}">buyer01</td>
+            </tr>
+            <tr>
+                <th>联系电话</th>
+                <td th:text="${buyer.phone}">13800000000</td>
+            </tr>
+            <tr>
+                <th>默认交易地点</th>
+                <td th:text="${buyer.defaultPlace != null ? buyer.defaultPlace : '未填写（下单时可填）'}">图书馆门口</td>
+            </tr>
+            <tr>
+                <th>注册时间</th>
+                <td th:text="${#dates.format(new java.util.Date(buyer.createdAt), 'yyyy-MM-dd HH:mm')}">2026-10-20 22:00</td>
+            </tr>
+            </tbody>
+        </table>
+        <p class="muted" style="margin-top: 12px;">
+            密码以 sha256 加盐摘要存储，数据库里没有明文，任何人（包括管理员）都无法查看你的原始密码。
+        </p>
+    </div>
+
+    <div class="card">
+        <h2>接下来可以做什么</h2>
+        <p>浏览商品</p>
+        <p class="muted">下单入口在商品详情页；「我的订单」只显示已有结果（成功 / 失败）的订单，排队中与交易中的订单不在此列出。</p>
+        <p style="margin-top: 12px;">
+            <a class="btn btn-primary" th:href="@{/}">去逛商品</a>
+            <a class="btn" th:href="@{/my/orders}">我的订单</a>
+        </p>
+    </div>
+
+</div>
+</body>
+</html>

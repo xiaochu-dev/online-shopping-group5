@@ -1,4 +1,4 @@
-package com.group5.shop.common.entity;
+package com.group5.shop.product.domain;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -9,7 +9,7 @@ import com.group5.shop.common.constant.CategoryStatus;
  * 商品分类实体，对应表 {@code category}（T2-06，迭代 2 新增）。
  *
  * <p>用途：黄程宇的「发布页分类下拉框」与「分类维护页」直接使用本实体与
- * {@link com.group5.shop.common.mapper.CategoryMapper}，无需自己建表。</p>
+ * {@link com.group5.shop.product.domain.CategoryMapper}，无需自己建表。</p>
  *
  * @author 胡成溯（组长）
  */
