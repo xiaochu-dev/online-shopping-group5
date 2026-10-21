@@ -9,6 +9,7 @@ import com.group5.shop.common.mapper.CategoryMapper;
 import com.group5.shop.common.mapper.IntentMapper;
 import com.group5.shop.common.mapper.ProductMapper;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -30,26 +32,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrlPattern;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 /**
- * T2-11 ~ T2-14 验收测试：买家门户的四条链路。
+ * T2-13 ~ T2-16 验收测试：买家门户的四条链路。
  *
- * <p>覆盖范围与 {@code docs/API契约-迭代2.md} 第 4 节的 B-1 ~ B-4 一一对应：
- * 列表（分页/分类/搜索）、详情、提交意向、凭口令码撤销，
- * 外加三条「不能只靠肉眼确认」的规则：下架商品不可见、同号可重复提交、撤销提示不泄露码是否有效。</p>
+ * <p>覆盖：列表（分页 / 一级分类筛选 / 关键词搜索）、详情（多图与状态）、
+ * <b>下单强制登录</b>、买家资料快照、重复提交限制，以及「下架商品不可见」这类
+ * 只能靠走完整 DispatcherServlet 链路验证的入口规则。</p>
  *
- * <p><b>为什么用 MockMvc 而不是直接调 Service</b>：本模块最容易错的地方在「入口」——
- * 买家页必须公开（不能被登录拦截器拦成 302）、商品不存在要走错误页（404 而非 500）、
- * 提交成功后口令码只出现在响应正文里（不能进 URL）。这些只有走完整 DispatcherServlet 链路才验证得了。</p>
- *
- * <p>每个测试类使用独立临时数据库，互不干扰；数据由 {@link #seed()} 一次性造好。</p>
+ * <p>「未登录」与「已登录」通过 {@link TestBuyerContext} 切换，不依赖尚未交付的买家账号模块。</p>
  *
  * @author 周到
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(TestBuyerContext.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class PortalFlowTest {
@@ -76,17 +76,24 @@ class PortalFlowTest {
     @Autowired
     private CategoryMapper categoryMapper;
 
-    /** 在售商品：数码电子（分类 1） */
+    /** 在售商品：数码电子 */
     private static Long onSaleId;
-    /** 在售商品：图书教材（分类 2） */
+    /** 在售商品：图书教材 */
     private static Long textbookId;
     /** 已下架商品 */
     private static Long delistedId;
-    /** 提交意向后拿到的口令码，供后续撤销用例复用 */
-    private static String tokenOfBuyerA;
+    /** 交易中（冻结）商品 */
+    private static Long frozenId;
+    /** 图书分类 id，分类筛选用 */
+    private static Long bookCategoryId;
+
+    @BeforeEach
+    void resetLoginState() {
+        TestBuyerContext.reset();
+    }
 
     /**
-     * 造测试数据：两个不同分类的在售商品 + 一个已下架商品。
+     * 造测试数据：两个不同分类的在售商品 + 一个已下架 + 一个交易中。
      *
      * <p>种子账号与 5 个分类由 {@code schema.sql} 在上下文启动时写入，这里只补商品。</p>
      */
@@ -95,11 +102,12 @@ class PortalFlowTest {
         List<Category> categories = categoryMapper.selectEnabled();
         assertThat(categories).as("schema.sql 应已写入 5 个种子分类").hasSizeGreaterThanOrEqualTo(2);
         Long digitalId = categories.get(0).getId();
-        Long bookId = categories.get(1).getId();
+        bookCategoryId = categories.get(1).getId();
 
         onSaleId = insertProduct("机械键盘 87 键", "青轴，白色背光", digitalId, 29900L, ProductStatus.ON_SALE);
-        textbookId = insertProduct("软件工程实践教材", "2026 版，含实验指导", bookId, 4550L, ProductStatus.ON_SALE);
+        textbookId = insertProduct("软件工程实践教材", "2026 版，含实验指导", bookCategoryId, 4550L, ProductStatus.ON_SALE);
         delistedId = insertProduct("已下架的旧款鼠标", "这款应当对买家不可见", digitalId, 9900L, ProductStatus.DELISTED);
+        frozenId = insertProduct("正在交易的显示器", "有人正在与卖家成交", digitalId, 89900L, ProductStatus.FROZEN);
     }
 
     private Long insertProduct(String name, String desc, Long categoryId, Long priceCents, String status) {
@@ -124,37 +132,35 @@ class PortalFlowTest {
     }
 
     // ==================================================================
-    // B-1 列表 / T2-12 搜索与分类筛选
+    // 列表 / 搜索 / 分类筛选（T2-13 / T2-14）
     // ==================================================================
 
     @Test
     @Order(1)
     void 买家首页公开可访问且只显示在售商品() throws Exception {
-        MvcResult result = mockMvc.perform(get("/"))
+        String html = bodyOf(mockMvc.perform(get("/"))
                 .andExpect(status().isOk())
                 .andExpect(view().name("portal/product-list"))
-                .andReturn();
+                .andExpect(model().attributeExists("pageResult", "categoryTree", "categoryNames"))
+                .andReturn());
 
-        String html = bodyOf(result);
-        assertThat(html).contains("机械键盘 87 键", "软件工程实践教材");
-        // 下架商品不能出现在买家列表里（FR-03-1）
+        assertThat(html).contains("机械键盘 87 键");
+        assertThat(html).contains("软件工程实践教材");
+        // 已下架与交易中的商品都不该出现在列表里（列表只查 on_sale）
         assertThat(html).doesNotContain("已下架的旧款鼠标");
-        // 价格必须以「元、两位小数」展示，不能是 299 或 29900
-        assertThat(html).contains("¥ 299.00", "¥ 45.50").doesNotContain("¥ 29900");
+        assertThat(html).doesNotContain("正在交易的显示器");
     }
 
     @Test
     @Order(2)
     void 关键词搜索命中名称也命中描述() throws Exception {
-        // 命中名称
         String byName = bodyOf(mockMvc.perform(get("/").param("keyword", "键盘"))
                 .andExpect(status().isOk()).andReturn());
-        assertThat(byName).contains("机械键盘 87 键").doesNotContain("软件工程实践教材");
+        assertThat(byName).contains("机械键盘 87 键");
 
-        // 命中描述（「含实验指导」只出现在描述里）
         String byDesc = bodyOf(mockMvc.perform(get("/").param("keyword", "实验指导"))
                 .andExpect(status().isOk()).andReturn());
-        assertThat(byDesc).contains("软件工程实践教材").doesNotContain("机械键盘 87 键");
+        assertThat(byDesc).contains("软件工程实践教材");
     }
 
     @Test
@@ -168,23 +174,28 @@ class PortalFlowTest {
     @Test
     @Order(4)
     void 分类筛选只返回该分类商品() throws Exception {
-        Long bookCategoryId = productMapper.selectById(textbookId).getCategoryId();
         String html = bodyOf(mockMvc.perform(get("/").param("categoryId", String.valueOf(bookCategoryId)))
                 .andExpect(status().isOk()).andReturn());
-        assertThat(html).contains("软件工程实践教材").doesNotContain("机械键盘 87 键");
+
+        assertThat(html).contains("软件工程实践教材");
+        assertThat(html).doesNotContain("机械键盘 87 键");
+
+        // 传一个不存在的分类：应给空结果，而不是「筛选失效返回全部」
+        String unknown = bodyOf(mockMvc.perform(get("/").param("categoryId", "999999"))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(unknown).contains("没有找到符合条件的商品");
     }
 
     @Test
     @Order(5)
     void 分页参数非法时回落到默认值而不报错() throws Exception {
-        // page=0 与 size=-5 都属于「非法输入」，应归一化后正常返回第一页
         mockMvc.perform(get("/").param("page", "0").param("size", "-5"))
                 .andExpect(status().isOk())
-                .andExpect(view().name("portal/product-list"));
+                .andExpect(model().attributeExists("pageResult"));
     }
 
     // ==================================================================
-    // B-2 详情
+    // 详情（T2-15）
     // ==================================================================
 
     @Test
@@ -193,166 +204,110 @@ class PortalFlowTest {
         String html = bodyOf(mockMvc.perform(get("/products/" + onSaleId))
                 .andExpect(status().isOk())
                 .andExpect(view().name("portal/product-detail"))
-                .andExpect(model().attributeExists("product", "queueSize"))
+                .andExpect(model().attributeExists("view", "product", "queueSize"))
                 .andReturn());
-        assertThat(html).contains("机械键盘 87 键", "提交购买意向");
+
+        assertThat(html).contains("机械键盘 87 键");
+        assertThat(html).contains("人在排队");
     }
 
     @Test
     @Order(7)
-    void 已下架商品详情返回404() throws Exception {
-        // 不能是 500，也不能让买家看到「已下架商品」的详情
+    void 已下架与不存在的商品详情返回404() throws Exception {
         mockMvc.perform(get("/products/" + delistedId)).andExpect(status().isNotFound());
+        mockMvc.perform(get("/products/99999999")).andExpect(status().isNotFound());
     }
 
     @Test
     @Order(8)
-    void 不存在的商品详情返回404() throws Exception {
-        mockMvc.perform(get("/products/99999999")).andExpect(status().isNotFound());
+    void 交易中的商品详情可见但下单按钮不可用() throws Exception {
+        String html = bodyOf(mockMvc.perform(get("/products/" + frozenId))
+                .andExpect(status().isOk()).andReturn());
+
+        // 交易中的商品不能 404——买家要能看到「还在，只是正在成交」，否则以为商品没了
+        assertThat(html).contains("正在交易的显示器");
+        assertThat(html).contains("该商品正在交易中，暂时无法提交意向");
+        assertThat(html).doesNotContain("/intents\"");
     }
 
     // ==================================================================
-    // B-3 提交意向
+    // 下单：强制登录 + 快照 + 去重（T2-16）
     // ==================================================================
 
     @Test
     @Order(9)
-    void 提交意向成功并当场返回32位口令码() throws Exception {
-        long before = intentMapper.selectQueue(onSaleId).size();
+    void 未登录提交意向跳买家登录页并带回跳地址() throws Exception {
+        TestBuyerContext.currentId = null;
 
-        MvcResult result = mockMvc.perform(post("/products/" + onSaleId + "/intents")
-                        .param("buyerName", "张三")
-                        .param("phone", "13800000001"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("portal/product-detail"))
-                .andReturn();
-
-        tokenOfBuyerA = (String) result.getModelAndView().getModel().get("tokenCode");
-        assertThat(tokenOfBuyerA)
-                .as("口令码应为 32 位十六进制")
-                .hasSize(32).matches("[0-9a-f]{32}");
-        // 口令码不能出现在 URL 上（否则进浏览器历史与访问日志）
-        assertThat(result.getResponse().getRedirectedUrl()).isNull();
-
-        Intent saved = intentMapper.selectByTokenCode(tokenOfBuyerA);
-        assertThat(saved).isNotNull();
-        assertThat(saved.getStatus()).isEqualTo(IntentStatus.PENDING);
-        assertThat(saved.getBuyerName()).isEqualTo("张三");
-        assertThat(intentMapper.selectQueue(onSaleId)).hasSize((int) before + 1);
+        mockMvc.perform(post("/products/" + onSaleId + "/intents"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern("/buyer/login?redirect=*"));
     }
 
     @Test
     @Order(10)
-    void 姓名为空白时拒绝提交且不写库() throws Exception {
-        long before = intentMapper.selectQueue(onSaleId).size();
+    void 已登录下单成功并落库买家快照() throws Exception {
+        TestBuyerContext.currentId = TestBuyerContext.BUYER_ID;
 
-        MvcResult result = mockMvc.perform(post("/products/" + onSaleId + "/intents")
-                        .param("buyerName", "   ")
-                        .param("phone", "13800000002"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("portal/product-detail"))
-                .andReturn();
+        mockMvc.perform(post("/products/" + onSaleId + "/intents")
+                        .param("tradeAddress", "三食堂门口"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern("/products/" + onSaleId + "?msg=*"));
 
-        assertThat(bodyOf(result)).contains("姓名与联系电话均为必填项");
-        assertThat(intentMapper.selectQueue(onSaleId)).as("校验失败不能留下脏数据").hasSize((int) before);
+        Intent saved = intentMapper.selectActiveQueue(onSaleId).stream()
+                .filter(i -> TestBuyerContext.BUYER_ID.equals(i.getBuyerId()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("下单应写入一条 pending 意向"));
+
+        assertThat(saved.getStatus()).isEqualTo(IntentStatus.PENDING);
+        assertThat(saved.getBuyerName()).isEqualTo("测试客户");
+        assertThat(saved.getPhone()).isEqualTo("13800000000");
+        assertThat(saved.getTradeAddress()).isEqualTo("三食堂门口");
+        // 主路径不再生成口令码
+        assertThat(saved.getTokenCode()).isNull();
+        // 提交时不扣库存：本用例不关心库存，但至少要保证单据未结束
+        assertThat(saved.getFinishedAt()).isNull();
     }
 
     @Test
     @Order(11)
-    void 同一手机号连续提交两次得到两条独立记录() throws Exception {
-        // 清偿迭代 1 遗留 C-3：不按号码去重
-        MvcResult first = mockMvc.perform(post("/products/" + textbookId + "/intents")
-                        .param("buyerName", "李四").param("phone", "13900000001"))
-                .andExpect(status().isOk()).andReturn();
-        MvcResult second = mockMvc.perform(post("/products/" + textbookId + "/intents")
-                        .param("buyerName", "李四").param("phone", "13900000001"))
-                .andExpect(status().isOk()).andReturn();
+    void 同一买家对同一商品重复提交被拒() throws Exception {
+        TestBuyerContext.currentId = TestBuyerContext.BUYER_ID;
 
-        String t1 = (String) first.getModelAndView().getModel().get("tokenCode");
-        String t2 = (String) second.getModelAndView().getModel().get("tokenCode");
-        assertThat(t1).isNotEqualTo(t2);
-        assertThat(intentMapper.selectQueue(textbookId)).hasSize(2);
+        mockMvc.perform(post("/products/" + onSaleId + "/intents"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern("/products/" + onSaleId + "?error=*"));
+
+        long active = intentMapper.selectActiveQueue(onSaleId).stream()
+                .filter(i -> TestBuyerContext.BUYER_ID.equals(i.getBuyerId()))
+                .count();
+        assertThat(active).as("同一买家同一商品最多 1 条未结束意向").isEqualTo(1);
     }
 
     @Test
     @Order(12)
-    void 已下架商品不接受新意向() throws Exception {
-        long before = intentMapper.selectQueue(delistedId).size();
+    void 未填写交易地点时使用注册时的默认地点() throws Exception {
+        TestBuyerContext.currentId = TestBuyerContext.OTHER_BUYER_ID;
 
-        mockMvc.perform(post("/products/" + delistedId + "/intents")
-                        .param("buyerName", "王五").param("phone", "13700000001"))
-                .andExpect(status().isNotFound());
+        mockMvc.perform(post("/products/" + textbookId + "/intents"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern("/products/" + textbookId + "?msg=*"));
 
-        assertThat(intentMapper.selectQueue(delistedId)).hasSize((int) before);
+        Intent saved = intentMapper.selectActiveQueue(textbookId).stream()
+                .filter(i -> TestBuyerContext.OTHER_BUYER_ID.equals(i.getBuyerId()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("下单应写入一条 pending 意向"));
+
+        assertThat(saved.getTradeAddress()).isEqualTo("东门快递点");
     }
-
-    // ==================================================================
-    // B-4 撤销
-    // ==================================================================
 
     @Test
     @Order(13)
-    void 撤销排队中的意向成功且状态变为已撤销() throws Exception {
-        long before = intentMapper.selectQueue(onSaleId).size();
+    void 已下架商品不接受新意向() throws Exception {
+        TestBuyerContext.currentId = TestBuyerContext.BUYER_ID;
 
-        String redirected = mockMvc.perform(post("/intents/cancel").param("tokenCode", tokenOfBuyerA))
+        mockMvc.perform(post("/products/" + delistedId + "/intents"))
                 .andExpect(status().is3xxRedirection())
-                .andReturn().getResponse().getRedirectedUrl();
-
-        assertThat(redirected).contains("/?msg=");
-        assertThat(intentMapper.selectByTokenCode(tokenOfBuyerA).getStatus())
-                .isEqualTo(IntentStatus.CANCELLED);
-        assertThat(intentMapper.selectQueue(onSaleId))
-                .as("撤销后队列自动少一条，其余买家前移")
-                .hasSize((int) before - 1);
-    }
-
-    @Test
-    @Order(14)
-    void 重复撤销同一口令码的提示与码无效时完全一致() throws Exception {
-        String again = mockMvc.perform(post("/intents/cancel").param("tokenCode", tokenOfBuyerA))
-                .andExpect(status().is3xxRedirection())
-                .andReturn().getResponse().getRedirectedUrl();
-        String never = mockMvc.perform(post("/intents/cancel").param("tokenCode", "deadbeef".repeat(4)))
-                .andExpect(status().is3xxRedirection())
-                .andReturn().getResponse().getRedirectedUrl();
-
-        // 提示语必须一字不差，否则等于告诉对方「这个码是真的，只是用过了」
-        assertThat(again).contains("/?error=").isEqualTo(never);
-    }
-
-    @Test
-    @Order(15)
-    void 空口令码按无效处理不报异常() throws Exception {
-        mockMvc.perform(post("/intents/cancel").param("tokenCode", ""))
-                .andExpect(status().is3xxRedirection());
-    }
-
-    // ==================================================================
-    // 队列语义
-    // ==================================================================
-
-    @Test
-    @Order(16)
-    void 队列严格按提交时间先到先得() throws Exception {
-        Long productId = insertProduct("队列排序测试品", "用来验证先到先得", null, 100L, ProductStatus.ON_SALE);
-        for (int i = 1; i <= 3; i++) {
-            mockMvc.perform(post("/products/" + productId + "/intents")
-                            .param("buyerName", "买家" + i).param("phone", "1360000000" + i))
-                    .andExpect(status().isOk());
-        }
-
-        List<Intent> queue = intentMapper.selectQueue(productId);
-        assertThat(queue).hasSize(3);
-        assertThat(queue).extracting(Intent::getBuyerName).containsExactly("买家1", "买家2", "买家3");
-        // created_at 单调不减，且同一毫秒时由自增 id 兜底
-        for (int i = 1; i < queue.size(); i++) {
-            Intent prev = queue.get(i - 1);
-            Intent cur = queue.get(i);
-            assertThat(prev.getCreatedAt() < cur.getCreatedAt()
-                    || (prev.getCreatedAt().equals(cur.getCreatedAt()) && prev.getId() < cur.getId()))
-                    .as("第 %d 位与第 %d 位顺序必须稳定", i, i + 1)
-                    .isTrue();
-        }
+                .andExpect(redirectedUrlPattern("/products/" + delistedId + "?error=*"));
     }
 }

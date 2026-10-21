@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 买家商品列表 —— 买家门户：周到（T2-11 列表 / T2-12 搜索） -->
+<!-- 买家商品列表 —— 买家门户：周到（T2-13 两级筛选 / T2-14 搜索） -->
 <html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
 <head th:replace="~{portal/fragments :: head('全部商品')}"></head>
 <body>
@@ -11,7 +11,7 @@
     <div class="banner banner-ok" th:if="${msg}" th:text="${msg}"></div>
     <div class="banner banner-error" th:if="${error}" th:text="${error}"></div>
 
-    <!-- ==================== 搜索与分类筛选（T2-12） ==================== -->
+    <!-- ==================== 搜索与两级分类筛选（T2-13 / T2-14） ==================== -->
     <div class="card">
         <h2>找商品</h2>
         <form method="get" th:action="@{/}">
@@ -22,12 +22,29 @@
             </div>
             <div class="form-row">
                 <label for="categoryId">分类</label>
+                <!--
+                  两级分类下拉：一级用 optgroup 分组，组内第一项是「一级（全部）」。
+                  选一级 = 连带筛出它下面所有二级分类的商品；选二级 = 只筛该二级。
+                  若分类树尚未升级为两级（product 模块 T2-08 未合入），
+                  列表接口会退化成单级，这里自动渲染成普通 option。
+                -->
                 <select id="categoryId" name="categoryId">
                     <option value="">全部分类</option>
-                    <option th:each="c : ${categories}"
-                            th:value="${c.id}"
-                            th:text="${c.name}"
-                            th:selected="${categoryId != null and categoryId == c.id}">分类</option>
+                    <th:block th:each="top : ${categoryTree}">
+                        <option th:if="${top.children.isEmpty()}"
+                                th:value="${top.id}"
+                                th:text="${top.name}"
+                                th:selected="${categoryId != null and categoryId == top.id}">分类</option>
+                        <optgroup th:unless="${top.children.isEmpty()}" th:label="${top.name}">
+                            <option th:value="${top.id}"
+                                    th:text="'全部 · ' + ${top.name}"
+                                    th:selected="${categoryId != null and categoryId == top.id}">全部</option>
+                            <option th:each="child : ${top.children}"
+                                    th:value="${child.id}"
+                                    th:text="${child.name}"
+                                    th:selected="${categoryId != null and categoryId == child.id}">子分类</option>
+                        </optgroup>
+                    </th:block>
                 </select>
             </div>
             <button type="submit" class="btn btn-primary">搜索</button>
@@ -35,7 +52,7 @@
         </form>
     </div>
 
-    <!-- ==================== 商品列表（T2-11） ==================== -->
+    <!-- ==================== 商品列表 ==================== -->
     <p class="muted" th:if="${pageResult.total > 0}">
         共 <b th:text="${pageResult.total}">0</b> 件在售商品
         <span th:if="${keyword != ''}">，关键词「<b th:text="${keyword}">—</b>」</span>
@@ -47,7 +64,7 @@
         <p th:if="${keyword != '' or categoryId != null}">没有找到符合条件的商品</p>
         <p th:unless="${keyword != '' or categoryId != null}">暂无商品在售</p>
         <p class="muted" th:if="${keyword != '' or categoryId != null}">
-            试试换个关键词，或<a th:href="@{/}">查看全部商品</a>。
+            试试换个关键词或换个分类，也可以<a th:href="@{/}">查看全部商品</a>。
         </p>
     </div>
 
@@ -83,20 +100,6 @@
               th:text="'第 ' + ${pageResult.page} + ' / ' + ${pageResult.totalPages} + ' 页'">第 1 / 1 页</span>
         <a class="btn btn-sm" th:if="${pageResult.hasNext}"
            th:href="@{/(page=${pageResult.page + 1}, size=${pageResult.size}, categoryId=${categoryId}, keyword=${keyword})}">下一页</a>
-    </div>
-
-    <!-- ==================== 凭口令码撤销（T2-14） ==================== -->
-    <div class="card">
-        <h2>凭口令码撤销意向</h2>
-        <p class="muted">
-            提交意向时页面会显示一串口令码，请自行保存。只有<strong>仍在排队中</strong>的意向可以撤销；
-            已经进入交易或已结束的意向无法撤销。
-        </p>
-        <form method="post" th:action="@{/intents/cancel}" class="inline-form">
-            <input type="text" name="tokenCode" placeholder="粘贴你的口令码" required
-                   style="min-width:340px;font-family:Consolas,monospace;">
-            <button type="submit" class="btn btn-warning">撤销该意向</button>
-        </form>
     </div>
 
 </div>
