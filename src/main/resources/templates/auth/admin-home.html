@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 后台首页 —— 平台基座：胡成溯（组长）T2-01 ~ T2-06 -->
+<!-- 后台首页 —— 平台基座：胡成溯（组长）T2-01 ~ T2-07；按迭代2实际接入情况维护 -->
 <html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
 <head th:replace="~{fragments/layout :: head('后台首页')}"></head>
 <body>
@@ -60,30 +60,30 @@
             </thead>
             <tbody>
             <tr>
-                <td>平台基座与账号</td>
+                <td>平台基座、账号与客户</td>
                 <td>胡成溯</td>
-                <td><code>common/</code>、<code>auth/</code></td>
-                <td><code>/admin</code></td>
-                <td><span class="tag tag-green">已交付（T2-01 ~ T2-06）</span></td>
+                <td><code>common/</code>、<code>auth/</code><br><code>buyer/</code>、<code>admin/</code></td>
+                <td><a th:href="@{/admin}"><code>/admin</code></a><br><a th:href="@{/admin/customers}"><code>/admin/customers</code></a></td>
+                <td><span class="tag tag-green">已接入（T2-01 ~ T2-07）</span></td>
             </tr>
             <tr>
                 <td>商品中心</td>
                 <td>黄程宇</td>
                 <td><code>product/</code></td>
-                <td><code>/admin/products</code></td>
-                <td><span class="tag tag-orange">开发中（T2-07 ~ T2-10）</span></td>
+                <td><a th:href="@{/admin/products}"><code>/admin/products</code></a><br><a th:href="@{/admin/categories}"><code>/admin/categories</code></a></td>
+                <td><span class="tag tag-green">已接入（T2-08 ~ T2-12）</span></td>
             </tr>
             <tr>
                 <td>买家门户与交易</td>
                 <td>周到</td>
                 <td><code>portal/</code></td>
-                <td><code>/</code></td>
-                <td><span class="tag tag-green">已交付（T2-13 ~ T2-18）</span></td>
+                <td><a th:href="@{/}"><code>/</code></a><br><a th:href="@{/admin/intents}"><code>/admin/intents</code></a></td>
+                <td><span class="tag tag-green">已接入（T2-13 ~ T2-18）</span></td>
             </tr>
             </tbody>
         </table>
         <p class="muted">
-            两位同学按 <code>docs/API契约-迭代2.md</code> 并行编码，接入后把对应行的状态改为「已接入」即可。
+            点击入口可进入商品、分类、客户或交易管理页面。
         </p>
     </div>
 
