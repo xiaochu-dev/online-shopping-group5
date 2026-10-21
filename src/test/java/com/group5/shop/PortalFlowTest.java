@@ -322,4 +322,22 @@ class PortalFlowTest {
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrlPattern("/products/" + delistedId + "?error=*"));
     }
+
+    @Test
+    @Order(14)
+    void 交易地点与默认地点都为空时拒绝下单() throws Exception {
+        // 空地址一旦进队列就是死锁：卖家只能处理队首（先到先得），
+        // 排在后面的空地址单既不能被成交也不能被跳过，买家又没有自助撤销入口。
+        when(buyerContext.current())
+                .thenReturn(buyer(9003L, "没填地点的客户", "13700000000", null));
+
+        mockMvc.perform(post("/products/" + onSaleId + "/intents"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern("/products/" + onSaleId + "?error=*"));
+
+        long written = intentMapper.selectActiveQueue(onSaleId).stream()
+                .filter(i -> Long.valueOf(9003L).equals(i.getBuyerId()))
+                .count();
+        assertThat(written).as("两个地点都为空时不得写入队列").isZero();
+    }
 }

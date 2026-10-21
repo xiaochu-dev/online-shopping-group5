@@ -213,14 +213,23 @@ public class PortalService {
                     "你已对该商品提交过意向，请在卖家处理后再次购买");
         }
 
+        // 交易地点必填（挑战需求 A.2）：下单时填的优先，没填就用注册时的默认地点；
+        // 两者都空则直接拒绝，绝不能把空地址写进队列——卖家拿到一条没有交付地点的
+        // 意向既无法成交也无法跳过（先到先得只允许处理队首），只能由后台清库，等于死锁。
+        String address = StringUtils.hasText(tradeAddress)
+                ? tradeAddress.trim()
+                : nullToEmpty(buyer.getDefaultPlace()).trim();
+        if (address.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID,
+                    "请填写交易地点后再提交意向（可在注册资料的默认交易地点里预先填写）");
+        }
+
         Intent intent = new Intent();
         intent.setProductId(productId);
         intent.setBuyerId(buyerId);
         intent.setBuyerName(nullToEmpty(buyer.getUsername()));
         intent.setPhone(nullToEmpty(buyer.getPhone()));
-        intent.setTradeAddress(StringUtils.hasText(tradeAddress)
-                ? tradeAddress.trim()
-                : nullToEmpty(buyer.getDefaultPlace()));
+        intent.setTradeAddress(address);
         // 主路径不生成口令码（基线验收物仍可凭存量码撤销）
         intent.setTokenCode(null);
         intent.setStatus(IntentStatus.PENDING);

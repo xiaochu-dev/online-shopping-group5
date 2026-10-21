@@ -72,9 +72,10 @@
                 提交后请等待卖家确认；成交与否的结果会出现在「我的订单」里。
             </p>
             <div class="form-row">
-                <label for="tradeAddress">交易地点</label>
+                <label for="tradeAddress">交易地点（必填）</label>
                 <input type="text" id="tradeAddress" name="tradeAddress"
-                       placeholder="留空则使用注册时填写的默认交易地点">
+                       maxlength="100"
+                       placeholder="例如：三食堂门口 / 西门快递柜；留空则使用注册资料里的默认交易地点">
             </div>
             <button type="submit" class="btn btn-primary btn-block">提交意向，进入排队</button>
         </form>
