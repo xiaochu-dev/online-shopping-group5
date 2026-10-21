@@ -25,8 +25,11 @@
     <span class="brand">在线购物系统 · 第 5 组</span>
     <nav class="topnav">
         <a th:href="@{/admin}" th:classappend="${active == 'home'} ? 'nav-active' : ''">后台首页</a>
-        <a th:href="@{/admin/diagnostics}" th:classappend="${active == 'diagnostics'} ? 'nav-active' : ''">基座自检</a>
+        <a th:href="@{/admin/products}" th:classappend="${active == 'products'} ? 'nav-active' : ''">我的商品</a>
+        <a th:href="@{/admin/products/new}" th:classappend="${active == 'publish'} ? 'nav-active' : ''">发布商品</a>
+        <a th:href="@{/admin/intents}" th:classappend="${active == 'intents'} ? 'nav-active' : ''">交易与意向</a>
         <a th:href="@{/admin/customers}" th:classappend="${active == 'customers'} ? 'nav-active' : ''">客户管理</a>
+        <a th:href="@{/admin/diagnostics}" th:classappend="${active == 'diagnostics'} ? 'nav-active' : ''">基座自检</a>
         <a th:href="@{/}" th:classappend="${active == 'portal'} ? 'nav-active' : ''">买家门户</a>
         <a th:href="@{/logout}" class="nav-logout">退出登录</a>
     </nav>
