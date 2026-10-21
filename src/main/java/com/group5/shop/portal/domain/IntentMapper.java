@@ -5,6 +5,7 @@ import com.group5.shop.portal.domain.Intent;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 
@@ -125,4 +126,23 @@ public interface IntentMapper extends BaseMapper<Intent> {
      */
     @Select("SELECT COUNT(*) FROM intent WHERE status = #{status}")
     long countByStatus(@Param("status") String status);
+
+    /**
+     * 库存归零后，把某商品剩余排队中的意向<b>批量置失败</b>（A.1.4）。
+     *
+     * <p>库存为 0 意味着后面排队的人永远不会被确认成交，让他们继续挂着
+     * 只会制造「排了一天结果什么也没有」的体验。订单本身没有扣过库存，
+     * 所以这里不涉及任何回滚，只需把状态与原因写清楚。</p>
+     *
+     * @param productId 商品 id
+     * @param reason    失败原因（写入 fail_reason，供「我的订单」展示）
+     * @param now       结束时间（毫秒）
+     * @return 受影响条数
+     */
+    @Update("UPDATE intent SET status = 'failed', trade_result = 'failed', "
+            + "fail_reason = #{reason}, finished_at = #{now} "
+            + "WHERE product_id = #{productId} AND status = 'pending'")
+    int failPendingOfProduct(@Param("productId") Long productId,
+                             @Param("reason") String reason,
+                             @Param("now") Long now);
 }

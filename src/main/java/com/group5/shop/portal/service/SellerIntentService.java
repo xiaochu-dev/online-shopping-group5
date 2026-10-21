@@ -49,6 +49,9 @@ public class SellerIntentService {
     /** 交易失败的默认原因 */
     private static final String DEFAULT_FAIL_REASON = "交易未达成";
 
+    /** 库存扣到 0 时，给剩下排队者的统一失败原因（A.1.4） */
+    private static final String SOLD_OUT_REASON = "商品库存已售罄，本次排队自动结束";
+
     private final IntentMapper intentMapper;
     private final ProductMapper productMapper;
     private final ProductPort productPort;
@@ -210,6 +213,14 @@ public class SellerIntentService {
         intentMapper.updateById(patch);
 
         productPort.release(intent.getProductId());
+
+        // A.1.4：库存扣到 0 时，后面排队的人已经不可能成交，批量置失败并写明原因。
+        // stockOf() 在商品表还没有 stock 字段时返回 null（按「不限」处理），此时不动作。
+        Integer left = productPort.stockOf(intent.getProductId());
+        if (left != null && left <= 0) {
+            intentMapper.failPendingOfProduct(intent.getProductId(), SOLD_OUT_REASON,
+                    TimeUtils.nowMillis());
+        }
         return intentMapper.selectById(intentId);
     }
 
