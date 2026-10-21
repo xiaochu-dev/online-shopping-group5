@@ -5,11 +5,11 @@
 | 文档名称 | 迭代 2 API 契约（T2-04） |
 | 项目名称 | 在线购物系统（挑战升级） |
 | 迭代期次 | 第 2 次迭代（Sprint 2） |
-| 文档版本 | v1.0 |
+| 文档版本 | v2.1（2026-10-22按已合入代码同步） |
 | 编制人 | 胡成溯（组长） |
 | 编制日期 | 2026-10-10 |
 | 适用范围 | 胡成溯（`auth/`）、黄程宇（`product/`）、周到（`portal/`） |
-| 依据 | 《迭代 2 工作任务表》v1.0、《03-架构设计与数据库表结构》v1.0 |
+| 依据 | v4工作任务表、iter2-java合并提交671ae63及当前Controller/Service/schema |
 
 > **本文件的作用**：三人并行开发时，唯一会产生「联调返工」的就是接口不一致。
 > 本文把每个路由的 **URL / 方法 / 入参 / 出参 / 状态码 / 重定向目标 / 模板名** 全部写死。
@@ -26,22 +26,24 @@
 | 服务地址 | `http://localhost:8080`（`server.port` 可改） |
 | 字符编码 | 全链路 UTF-8（页面、表单、SQL 脚本、日志） |
 | 页面表单提交 | `Content-Type: application/x-www-form-urlencoded`，字段名区分大小写 |
-| 文件上传 | `Content-Type: multipart/form-data`，字段名 `image` |
+| 文件上传 | `Content-Type: multipart/form-data`，字段名 `images`（多文件） |
 | 模板引擎 | Thymeleaf，模板放 `src/main/resources/templates/` |
 | 静态资源 | `/css/**`、`/images/**` → `classpath:/static/`；`/uploads/**` → 项目根 `./uploads/` |
 
 ### 1.2 两类请求与两种出口
 
-整个系统有两条平行的响应通道，**必须按 URI 前缀区分**，否则前端会拿到一段 HTML 而报 `Unexpected token <`：
+拦截器与全局异常处理根据URI及请求头区分页面/接口请求；当前商品与门户Controller主要返回页面或redirect视图。请求头不会把所有成功页面自动变成JSON：
 
 | 类型 | URI 特征 | 未登录时 | 异常时 |
 |------|---------|---------|--------|
-| 页面请求 | 其余所有路径 | `302` 跳 `/login?redirect=原地址` | 渲染 `error/error.html`，HTTP 状态按错误码 |
+| 页面请求 | 其余所有路径 | 卖家受保护页302跳/login；买家受保护页跳/buyer/login，均可带回跳地址 | 渲染 `error/error.html`，HTTP 状态按错误码 |
 | 接口请求 | 以 `/api/` 开头，或带 `Accept: application/json`，或带 `X-Requested-With: XMLHttpRequest` | `401` + JSON | `ApiResponse` JSON |
 
 判定逻辑已封装在 `com.group5.shop.common.util.RequestUtils#isApiRequest`，**不要各写一套**。
 
 ### 1.3 认证与会话
+
+卖家实际cookie为`SHOP_SESSION`（HttpSession），买家为独立签名`BUYER_SESSION`；不把任务表的SELLER_SESSION当作已配置名称。买家注册/登录接口详见账号模块分节。
 
 | 项 | 约定 |
 |----|------|
@@ -49,7 +51,7 @@
 | Cookie 属性 | `HttpOnly=true`、`SameSite=Lax`、`Path=/` |
 | 有效期 | 7 天（`server.servlet.session.timeout: 7d`） |
 | 受保护范围 | `/admin`、`/admin/**`（由 `LoginInterceptor` 统一拦截，**不要在各 Controller 里重复判断**） |
-| 公开范围 | `/login`、`/logout`、`/`、`/products/**`、`/intents/**`、`/api/**`（视具体接口） |
+| 公开范围 | 卖家/买家登录注册、商品浏览；提交意向与我的订单须买家登录 |
 | Session 中的键 | `LOGIN_SELLER`（String 用户名）、`LOGIN_SELLER_ID`（Long 卖家 id） |
 
 **取当前登录用户的正确写法**（黄程宇做「我的商品」时必须用这个，否则能改到别人的商品）：
@@ -123,23 +125,9 @@ PageResult<Product> result = PageResult.of(raw);
 **分页参数约定**：`page` 从 **1** 开始；`size` 默认 12，上限 100（插件已配 `maxLimit=100`）；
 页码越界返回空列表而不是跳回第一页。
 
-### 1.7 页面反馈约定（重要）
+### 1.7 页面反馈
 
-所有**表单提交**统一使用 Post/Redirect/Get，成功与失败都重定向：
-
-| 结果 | 重定向目标 | 页面表现 |
-|------|-----------|---------|
-| 成功 | `?msg=<URL 编码的中文>` | 顶部绿色提示条 |
-| 失败 | `?error=<URL 编码的中文>` | 顶部红色提示条 |
-
-Java 侧：
-
-```java
-return "redirect:/admin/products?msg=" + UriUtils.encode("商品发布成功", StandardCharsets.UTF_8);
-```
-
-**为什么失败也重定向**：避免用户按 F5 重复提交表单（重复发布商品 / 重复提交意向）。
-代价是失败后表单内容不保留，与迭代 1 口径一致，本迭代不做「回填表单」的增强。
+商品和分类表单使用redirect视图与Flash的msg/error；门户表单使用redirect和URL消息参数。卖家登录失败直接渲染登录页。不能笼统写所有表单失败都重定向，也不能把Flash消息误写成必有URL参数。当前redirect默认302，商品页面GET返回200。
 
 ### 1.8 数据口径
 
@@ -147,17 +135,16 @@ return "redirect:/admin/products?msg=" + UriUtils.encode("商品发布成功", S
 |------|---------|--------------|
 | 金额 | `price_cents`，单位「分」，`long` | 展示用 `Product#getPriceYuan()`（如 `9.90`）；入参用 `MoneyUtils.yuanToCents(String)` |
 | 时间 | 毫秒时间戳，`long` | 展示用 `TimeUtils.formatDateTime(long)` |
-| 商品状态 | `on_sale` / `delisted` / `frozen` | `ProductStatus.labelOf()` → 在售 / 已下架 / 交易中 |
+| 商品状态 | `on_sale` / `frozen` / `off_shelf`；`delisted`兼容历史 | `Product#getStatusLabel()`处理off_shelf，兼容旧状态标签 |
 | 意向状态 | `pending` / `trading` / `success` / `failed` / `cancelled` | `IntentStatus.labelOf()` |
 | 分类状态 | `enabled` / `disabled` | `CategoryStatus.labelOf()` |
 | 图片路径 | 相对路径字符串，如 `uploads/a1b2.png`、`images/placeholder.png` | `<img th:src="@{'/' + ${p.imagePath}}">` |
 
-> 迭代 2 **只写** `on_sale` 与 `delisted`；`frozen` 与意向的 `trading/success/failed` 由迭代 3 使用，
-> 表结构已预先放开，届时不需要改表。
+> 本迭代已实际使用冻结、交易结果与库存归零下架，当前状态以第3节为准。
 
 ---
 
-## 2 已实现接口 · 账号模块（胡成溯，T2-05）
+## 2 已实现接口 · 卖家账号（胡成溯；客户接口另见账号分节）
 
 ### 2.1 `GET /login` 登录页
 
@@ -234,249 +221,107 @@ curl -c cookie.txt -X POST http://localhost:8080/login \
 
 ---
 
-## 3 待实现接口 · 商品中心（黄程宇，T2-07 ~ T2-10）
+## 3 已实现接口 · 商品中心（黄程宇，T2-08～T2-12）
 
-> 全部位于 `com.group5.shop.product` 包，模板放 `templates/product/`，自动受登录拦截器保护。
-> 全部路由**必须**按 `sellerId` 过滤，防止看到/改到别人的商品。
+Controller位于`product/controller/`，卖家后台路由继承`LoginInterceptor`。商品查询和操作使用Session中的卖家编号，不接受客户端指定sellerId。表单使用redirect视图和Flash消息，当前默认302；页面GET成功200。
 
-### 3.1 路由总表
+| 方法 | 路径 | 入参 | 响应/模型 |
+| --- | --- | --- | --- |
+| GET | /admin/products | status选填 | product/list；products、selectedStatus |
+| GET | /admin/products/new | 无 | product/publish；tree |
+| GET | /admin/products/publish | 无 | 同发布页 |
+| POST | /admin/products | name、price、categoryId、stock、description、images、imageOrder、primaryIndex | 成功回/admin/products；业务失败回/admin/products/new |
+| POST | /admin/products/{id}/stock | stock | 调整库存后回/admin/products |
+| POST | /admin/products/{id}/off-shelf | 无 | 手动下架后回/admin/products |
+| POST | /admin/products/{id}/relist | 无 | 重新上架后回/admin/products |
+| GET | /admin/categories | 无 | product/categories；categories |
+| POST | /admin/categories | name、parentId选填、sortNo默认0 | 新增分类后回/admin/categories |
+| POST | /admin/categories/{id}/status | enabled布尔值 | 启停后回/admin/categories |
+| POST | /admin/categories/{id}/delete | 无 | 仅删除无子类、无商品引用的分类 |
 
-| 编号 | 方法 | 路径 | 功能 | 成功响应 |
-|:--:|:--:|------|------|---------|
-| P-1 | GET | `/admin/products` | 我的商品列表 | `200` `product/my-products.html` |
-| P-2 | GET | `/admin/products/new` | 发布页 | `200` `product/product-form.html` |
-| P-3 | POST | `/admin/products` | 提交发布 | `303` `/admin/products?msg=商品发布成功` |
-| P-4 | GET | `/admin/products/{id}/edit` | 编辑页 | `200` `product/product-form.html` |
-| P-5 | POST | `/admin/products/{id}` | 保存编辑 | `303` `/admin/products?msg=商品已保存` |
-| P-6 | POST | `/admin/products/{id}/delist` | 下架 | `303` `/admin/products?msg=商品已下架` |
-| P-7 | POST | `/admin/products/{id}/onsale` | 重新上架 | `303` `/admin/products?msg=商品已上架` |
-| P-8 | GET | `/admin/categories` | 分类管理页 | `200` `product/categories.html` |
-| P-9 | POST | `/admin/categories` | 新增分类 | `303` `/admin/categories?msg=分类已新增` |
-| P-10 | POST | `/admin/categories/{id}` | 修改分类 | `303` `/admin/categories?msg=分类已更新` |
+### 3.1 发布与图片字段
 
-### 3.2 P-1 `GET /admin/products` 我的商品列表
+`name`去空格后须为1～120字符；`price`为大于0、最多两位小数的元金额，存为整数分；`categoryId`必填且必须是启用的二级分类，父级也须启用；`stock`为非负整数；`description`可空、最多100000字符，保存前过滤。
 
-| 项 | 内容 |
-|----|------|
-| 入参 | `status`（可选：`on_sale` / `delisted`，不传为全部） |
-| 查询 | `WHERE seller_id = 当前登录 id [AND status = ?] ORDER BY published_at DESC, id DESC` |
-| Model | `products`（`List<Product>`）、`categoryNames`（`Map<Long,String>`）、`status`、`msg`、`error` |
-| 模板 | `product/my-products.html` |
+`images`为multipart多文件字段，最多9张；单张上限5×1024×1024字节，JPG/JPEG/PNG扩展名与文件头须匹配，并完成解码，像素数最多4000万。未选文件使用占位图；具名空文件被拒。全部校验成功才写盘，数据库事务失败清理本次新文件。
 
-### 3.3 P-3 `POST /admin/products` 提交发布（核心）
+`imageOrder`为0起始的原文件下标完整排列；`primaryIndex`为原文件下标。发布前可排序、选择主图；发布后没有改图接口。`product_image`保存file_path、sort_no、is_primary；image_path同步封面。图集返回封面优先，再按sort_no排序。Servlet单文件接收上限6MB、请求50MB，业务层仍按单张5MiB限制。
 
-| 入参 | 类型 | 必填 | 校验规则 | 失败提示 |
-|------|------|:--:|---------|---------|
-| `name` | text | 是 | 去空格后非空 | 商品名称不能为空 |
-| `description` | textarea | 否 | 原样保存，允许空串 | — |
-| `price` | text | 是 | 匹配 `^\d{1,9}(\.\d{1,2})?$` 且 > 0，转「分」存储 | 价格不能为空 / 价格格式非法，最多两位小数 / 价格必须大于 0 |
-| `categoryId` | select | 否 | 若传值，必须存在于 `category` 且 `status='enabled'` | 所选分类不存在或已禁用 |
-| `image` | file | 否 | 仅 JPG/PNG（扩展名 + 文件头魔数双校验），≤ 5MB，空文件拒绝 | 见下表 |
+### 3.2 分类与状态
 
-图片校验细则（与迭代 1 的 FR-02-6 完全一致）：
+只允许两级；同父级同名被拒，不同父级可同名。停用一级后，其子类从买家分类树隐藏。有子类或商品引用的分类不能删除，只能停用。当前没有分类改名/重排接口。
 
-| 检查项 | 判定 | 提示 |
-|--------|------|------|
-| 空文件 | `size == 0` | 上传的图片文件为空，请重新选择图片 |
-| 大小 | `> 5 * 1024 * 1024` | 图片大小不能超过 5MB |
-| 扩展名 | 不在 `.jpg/.jpeg/.png` | 图片仅支持 JPG/PNG 格式 |
-| 魔数 | JPEG `FF D8 FF` / PNG `89 50 4E 47 0D 0A 1A 0A` 与扩展名不符 | 图片内容与扩展名不符，仅支持真实的 JPG/PNG 文件 |
-| 未上传 | — | 数据库写 `images/placeholder.png` |
+| 动作 | 库存变化 | 状态和队列 |
+| --- | --- | --- |
+| 发布商品 | 指定非负整数 | 大于0为on_sale；0为off_shelf/auto |
+| 提交意向 | 不扣 | 要求登录、在售且有库存；进入pending |
+| 确认队首交易 | 不扣 | 意向trading，商品frozen |
+| 标记成功 | 原子扣1 | 意向success；库存归零则off_shelf/auto并将pending置failed，否则release恢复在售 |
+| 标记失败 | 不扣 | 意向failed或重回pending队尾；商品通过release恢复，手动下架保持下架 |
+| 手动下架 | 不扣 | on_sale或frozen均可变为off_shelf/manual |
+| 调整库存 | 改为输入值 | 为0时off_shelf/auto并结束pending；有交易时禁止直接调为0 |
+| 补货后重新上架 | 不扣 | 要求库存>0；无交易恢复on_sale，有交易恢复frozen |
 
-落盘规则：文件存 `./uploads/<UUID>.<ext>`，数据库 `image_path` 存 `uploads/<UUID>.<ext>`。
+`release()`只处理frozen，不能覆盖已下架状态。`delisted`仅兼容历史商品，不是当前发布/下架入口写入的主状态。商品级`traded_at/trade_result`为兼容字段，本次交易结果与时间记录在intent。
 
-写入字段：`seller_id`（当前登录者）、`category_id`、`name`、`description`、`image_path`、
-`price_cents`、`status='on_sale'`、`published_at=updated_at=当前毫秒`、`traded_at=NULL`、`trade_result=NULL`。
+### 3.3 功能边界与跨模块出口
 
-> **与迭代 1 的差异**：迭代 1 有「同一时间仅允许一件在售」的约束（FR-02-1/2），
-> 迭代 2 **取消该约束**，连续发布多件都必须成功。规格书 v1.2 由周到同步修订。
+没有商品编辑页、改名/改价/改图或删除商品接口；只支持库存调整与上下架。旧稿的`/{id}/edit`、`POST /admin/products/{id}`、`/delist`、`/onsale`、`POST /admin/categories/{id}`均不是当前路由。
 
-### 3.4 P-5 `POST /admin/products/{id}` 保存编辑
+CategoryQueryService提供分类树；ProductQueryService提供在售查询；ProductDetailService提供详情并实现门户的ProductPort（freeze/release/deduct/stockOf/imagesOf）；StockService负责库存。IntentQueuePort由portal中的ProductQueueAdapter实现，转调队列owner能力，商品模块不写intent表。原商品探针及无限库存降级已移除，卖家上下文适配仍保留。
 
-| 项 | 内容 |
-|----|------|
-| 入参 | 同 P-3；`image` 为空表示**保留原图** |
-| 前置校验 | 商品存在且 `seller_id == 当前登录 id`，否则 `303` → `/admin/products?error=无权操作该商品` |
-| 写入 | 除 `seller_id`、`published_at`、`status`、`traded_at` 外全部更新；`updated_at = now` |
+富文本允许段落、加粗、列表、HTTP/HTTPS图片与链接；iframe仅允许HTTPS的player.bilibili.com/player.html、www.youtube.com/embed/、www.youtube-nocookie.com/embed/，精确核对域名并设置sandbox。script、事件属性和其他iframe被过滤。实际播放证据仍待补。
 
-> 迭代 1 的决策 D3 是「商品发布后不可修改」，迭代 2 的 T2-10 明确要求「可进入编辑」，
-> **以迭代 2 任务表为准**，视为需求变更（已记录在《数据库设计-迭代2》变更记录）。
+详细校验与迁移见[商品中心契约](契约-商品中心-迭代2.md)。
 
-### 3.5 P-6 / P-7 上下架
+## 4 已实现接口 · 买家门户与交易（周到，T2-13～T2-18）
 
-| 接口 | 前置状态 | 后置状态 | 附带字段 |
-|------|---------|---------|---------|
-| P-6 下架 | `on_sale` | `delisted` | `traded_at = now`、`trade_result = 'manual_delist'`、`updated_at = now` |
-| P-7 上架 | `delisted` | `on_sale` | `traded_at = NULL`、`trade_result = NULL`、`updated_at = now` |
+浏览公开，下单和我的订单必须登录；卖家交易操作使用已有后台鉴权。
 
-状态不符合时：`303` → `/admin/products?error=当前状态不允许该操作`。
-同样必须校验 `seller_id` 归属。
+| 方法 | 路径 | 入参/模型与响应 |
+| --- | --- | --- |
+| GET | / | page默认1、size默认12上限100、categoryId、keyword；模型pageResult/categoryTree/categoryNames/categoryId/keyword/msg/error/buyerName，portal/product-list |
+| GET | /products/{id} | 只接受on_sale/frozen；模型product/view/queueSize/loggedIn/buyerName/msg/error，portal/product-detail；下架/不存在返回404 |
+| POST | /products/{id}/intents | tradeAddress选填，缺省取买家默认地点，两者都空拒绝；姓名电话取登录资料快照；redirect回详情显示消息 |
+| GET | /my/orders | 买家已结束订单，page/size；模型pageResult/buyerName，portal/my-orders |
+| GET | /admin/intents | 卖家商品及未结束意向数；portal/seller-products |
+| GET | /admin/intents/{productId} | 当前商品队列；portal/seller-intents |
+| POST | /admin/intents/{intentId}/confirm | 只确认队首，商品冻结；redirect回队列 |
+| POST | /admin/intents/{intentId}/success | 交易成功时才扣1；redirect回队列 |
+| POST | /admin/intents/{intentId}/fail | requeue布尔值、reason选填；失败作废或重排队尾；redirect回队列 |
+| POST | /intents/cancel | tokenCode；仅旧码兼容，买家页面无入口，redirect回列表 |
 
-### 3.6 P-8 ~ P-10 分类维护
+一级筛选包含其二级分类；关键词匹配名称和描述。下单不扣库存、不生成口令码，同买家同商品最多1条pending/trading。失败/成功结束后可再次购买。冻结时商品详情可查看，按钮不可下单；已下架不进入列表和详情。我的订单只显示success/failed，按finished_at倒序分页，排队/交易中不进入历史。
 
-| 接口 | 入参 | 校验 |
-|------|------|------|
-| P-9 新增 | `name`、`sortNo`（可选，默认 0） | 名称去空格后非空；同名已存在 → `分类名称已存在` |
-| P-10 修改 | `name`、`sortNo`、`status`（`enabled`/`disabled`） | 同上；分类不存在 → `分类不存在` |
+页面POST返回redirect视图，当前默认302；不能把注释中的303当作已配置状态。客户账号接口和客户管理见[账号与客户契约](契约-账号与客户-迭代2.md)。
 
-> 分类下拉框直接用 `categoryMapper.selectEnabled()`（已按 `sort_no` 升序）。
-> **禁用分类不会影响已归入该分类的历史商品。**
+## 5 JSON响应能力与实现边界
 
-### 3.7 商品模块可直接复用的基座能力
-
-| 用途 | 用法 |
-|------|------|
-| 分页（如需） | 注入 `ProductMapper`，`selectPage(new Page<>(p, s), wrapper)`，插件已注册 |
-| 价格校验 | `MoneyUtils.yuanToCents(price)`，非法输入直接抛 `BusinessException` |
-| 状态常量 | `ProductStatus.ON_SALE` / `DELISTED` / `labelOf` / `cssOf` |
-| 分类下拉 | `categoryMapper.selectEnabled()` |
-| 提示语渲染 | `?msg=` / `?error=`，模板已内置 `<div class="banner banner-ok|banner-error">` 样式 |
-| 图片占位 | `images/placeholder.png`（已随工程提供） |
-
----
-
-## 4 待实现接口 · 买家门户（周到，T2-11 ~ T2-14）
-
-> 位于 `com.group5.shop.portal` 包，模板放 `templates/portal/`，**全部公开、不加登录拦截**。
-
-### 4.1 路由总表
-
-| 编号 | 方法 | 路径 | 功能 | 成功响应 |
-|:--:|:--:|------|------|---------|
-| B-1 | GET | `/` | 商品列表（分页 + 分类 + 搜索） | `200` `portal/product-list.html` |
-| B-2 | GET | `/products/{id}` | 商品详情 | `200` `portal/product-detail.html` |
-| B-3 | POST | `/products/{id}/intents` | 提交购买意向 | `200` 渲染详情页，model 带 `tokenCode` |
-| B-4 | POST | `/intents/cancel` | 凭口令码撤销 | `303` `/` + `msg`/`error` |
-
-### 4.2 B-1 `GET /` 商品列表
-
-| 入参 | 默认 | 说明 |
-|------|------|------|
-| `page` | 1 | 从 1 开始，越界返回空列表 |
-| `size` | 12 | 上限 100 |
-| `categoryId` | 无 | 按分类筛选，不传为全部 |
-| `keyword` | 无 | 按 `name LIKE %kw% OR description LIKE %kw%` 模糊匹配 |
-
-查询条件（**只展示在售**）：
-
-```sql
-WHERE status = 'on_sale'
-  [AND category_id = ?]
-  [AND (name LIKE ? OR description LIKE ?)]
-ORDER BY published_at DESC, id DESC
-```
-
-Model：`pageResult`（`PageResult<Product>`）、`categories`（`List<Category>`）、`categoryId`、`keyword`、`msg`、`error`。
-模板需处理：空结果 → 「没有找到符合条件的商品」；无筛选结果 → 「暂无商品在售」。
-
-> 模糊匹配请用 MP 的 `.like()`，它会自动拼 `%kw%`；**不要**手拼 SQL 字符串（注入风险）。
-
-### 4.3 B-2 `GET /products/{id}` 商品详情
-
-| 项 | 内容 |
-|----|------|
-| 前置 | 商品存在且 `status = 'on_sale'` |
-| 不存在/已下架 | 抛 `BusinessException(ErrorCode.NOT_FOUND, "商品不存在或已下架")` → 自动渲染错误页 |
-| Model | `product`、`error`、`tokenCode`（首次进入为 null） |
-
-### 4.4 B-3 `POST /products/{id}/intents` 提交意向（核心）
-
-| 入参 | 必填 | 校验 |
-|------|:--:|------|
-| `buyerName` | 是 | 去空格后非空 |
-| `phone` | 是 | 去空格后非空；**不校验格式、不按号码去重** |
-
-校验与写入：
-
-| 顺序 | 检查 | 失败表现 |
-|:--:|------|---------|
-| 1 | 商品存在且 `status = 'on_sale'` | 渲染详情页，`error = 商品不存在或已下架` |
-| 2 | 姓名、电话非空 | 渲染详情页，`error = 姓名与联系电话均为必填项` |
-| 3 | 生成口令码写入 `intent` | — |
-
-写入字段：`product_id`、`buyer_name`、`phone`、`token_code = TimeUtils.randomTokenCode()`、
-`status = 'pending'`、`created_at = now`。
-
-**成功响应**：`200` 直接渲染 `portal/product-detail.html`（不是重定向），model 中 `tokenCode=<32 位码>`。
-页面必须在显眼位置一次性展示口令码并提示「请自行保存，丢失后无法撤销」。
-
-> 为什么这里不用 303 重定向：口令码只在这一次响应中展示，重定向会把它变成 URL 参数
-> （出现在浏览器历史、服务器日志里，等于公开）。迭代 1 的 FR-03-8「当场一次性显示」就是这个口径。
-
-**同号码重复提交**：本接口不查重、不合并，每次调用都插入独立一行。
-第 3 条遗留问题 C-3 由此清偿——三次提交得到三个互不干扰的口令码。
-
-### 4.5 B-4 `POST /intents/cancel` 撤销意向
-
-| 入参 | 必填 | 说明 |
-|------|:--:|------|
-| `tokenCode` | 是 | 32 位十六进制口令码 |
-
-| 情况 | 响应 |
-|------|------|
-| 口令码存在且状态为 `pending` | 更新 `status='cancelled'`，`303` → `/?msg=口令码 xxx 对应的意向已撤销` |
-| 口令码不存在 | `303` → `/?error=口令码无效，或该意向不可撤销（仅排队中的意向可撤销）` |
-| 口令码存在但已非 `pending` | 同上（提示语一致，不泄露「这个码存在但状态不对」） |
-
-> 队列位次不落库，撤销后其余意向自动前移，**不需要**批量更新 position 字段。
-
-### 4.6 门户模块可直接复用的基座能力
-
-| 用途 | 用法 |
-|------|------|
-| 队列查询 | `intentMapper.selectQueue(productId)`，已按 `created_at ASC, id ASC` 排好 |
-| 口令码反查 | `intentMapper.selectByTokenCode(code)` |
-| 生成口令码 | `TimeUtils.randomTokenCode()`（32 位十六进制） |
-| 分页 | `productMapper.selectPage(...)` + `PageResult.of(...)` |
-| 状态常量 | `ProductStatus`、`IntentStatus`（含 `cancellable(status)` 判断） |
-| 价格展示 | `Product#getPriceYuan()` |
-
----
-
-## 5 可选 JSON 接口（非验收必需）
-
-以下接口仅当页面需要 ajax 局部刷新时才实现，**不影响 T2-07 ~ T2-14 的验收**。
-时间不足时可以直接跳过，先保证页面链路跑通。
-
-| 方法 | 路径 | 入参 | 返回 |
-|:--:|------|------|------|
-| GET | `/api/products` | `page`、`size`、`categoryId`、`keyword` | `ApiResponse<PageResult<Product>>` |
-| GET | `/api/products/{id}` | — | `ApiResponse<Product>` |
-| POST | `/api/products` | JSON：`name`、`description`、`price`（元，字符串）、`categoryId` | `ApiResponse<Product>` |
-| POST | `/api/intents` | JSON：`productId`、`buyerName`、`phone` | `ApiResponse<{ "tokenCode": "..." }>` |
-| POST | `/api/intents/cancel` | JSON：`tokenCode` | `ApiResponse<Void>` |
-
-约定：成功 `200` + `code=0`；业务失败 `400`（或 `401`/`404`）+ 对应 `code`；
-未登录 `401` + `code=40102`。**不要**在 `/api/**` 里返回重定向。
-
----
+common提供ApiResponse、PageResult和异常返回能力；当前产品/门户以页面路由为主。旧稿列出的`/api/products`、`/api/intents`等JSON产品接口没有Controller实现，不作为已交付接口或本次承诺功能。
 
 ## 6 联调检查清单
 
-联调日（10-20）按此表逐条过，每项打勾才算通过。
+从iter2-java获取代码。以下为检查清单，不是本次重新执行记录；已有83项测试与浏览器证据见商品中心测试记录。
 
-| # | 检查项 | 验证方式 |
-|:--:|--------|---------|
-| 1 | 三模块都能在同一个 `mvn spring-boot:run` 下启动 | 拉 `main` 分支，本地跑通 |
-| 2 | 未登录访问 `/admin/products` 被拦到登录页 | 浏览器无痕窗口直接访问 |
-| 3 | 登录后三个模块的页面都能打开，无 500 | 逐个点 |
-| 4 | 黄程宇发布商品后，周到的列表页立即能看到 | 发布 → 首页刷新 |
-| 5 | 分类下拉框能选到种子分类，新增分类后立即可选 | 分类管理 → 发布页 |
-| 6 | 价格 9.90 在列表页显示为 9.90（不是 9.9 或 990） | 发布后看列表 |
-| 7 | 下架商品在买家列表消失，重新上架后恢复 | 上下架 → 刷新首页 |
-| 8 | 关键词能搜到名称与描述里的字 | 搜「显示器」「1080P」 |
-| 9 | 同一手机号连续提交 3 次，拿到 3 个不同口令码 | 提交 3 次对比 |
-| 10 | 撤销其中一个口令码，其余两个仍有效 | 撤销 → 再撤销另一个 |
-| 11 | 未登录用户看不到任何后台数据 | 无痕窗口访问 `/admin` 与 `/admin/products` |
-| 12 | 两个账号互不可见对方商品（若后续支持多账号） | `seller_id` 过滤生效 |
-
----
+| 检查 | 通过依据 |
+| --- | --- |
+| 卖家登录、分类树、发布三个商品 | 只能选启用的二级类；首页可找到商品 |
+| 9图排序/主图/格式边界 | 商品图集正确，第10张、损坏图和超限被拒 |
+| 未登录浏览与下单拦截 | 浏览公开，下单跳买家登录 |
+| 不同买家排队，同买家重复提交 | 下单不扣库存，重复未结束意向被拒 |
+| 确认交易→成功/失败 | 整件冻结，成功扣1，失败不扣，可作废或重排 |
+| 最后一件成交 | 自动下架，pending批量失败，订单结果可查 |
+| 补货、手动下架与重新上架 | 补货不自动上架，已有交易不被重新上架绕过 |
+| 富文本与视频 | 安全过滤正确；外站视频真实播放仍待验证 |
+| Java17环境与旧库升级 | 团队环境联调、订单迁移范围另行核对 |
 
 ## 7 变更记录
 
 | 版本 | 日期 | 变更内容 | 修订人 |
 |------|------|---------|--------|
 | v1.0 | 2026-10-10 | 首版：通用约定、账号模块 6 个接口、商品模块 10 个接口、门户模块 4 个接口、可选 JSON 接口、联调清单 | 胡成溯 |
+
+| v2.1 | 2026-10-22 | 按671ae63同步两级分类、库存、多图、富文本、实际路由和门户联动；旧方案不再作为当前契约 | 本次团队文档维护 |
 
 > 变更规则：任何一方修改路由或字段名，必须先更新本表并在小组群公告，
 > 对方确认后再改代码。**口头约定不算数。**
