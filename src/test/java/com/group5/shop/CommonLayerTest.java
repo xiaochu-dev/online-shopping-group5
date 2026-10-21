@@ -145,6 +145,7 @@ class CommonLayerTest {
             Product p = new Product();
             p.setSellerId(1L);
             p.setName("分页测试商品 " + i);
+            p.setCategoryId(categoryMapper.selectEnabled().get(0).getId());
             p.setDescription("");
             p.setImagePath("images/placeholder.png");
             p.setPriceCents(1000L * i);
@@ -179,6 +180,7 @@ class CommonLayerTest {
         Product product = new Product();
         product.setSellerId(1L);
         product.setName("队列测试商品");
+        product.setCategoryId(categoryMapper.selectEnabled().get(0).getId());
         product.setDescription("");
         product.setImagePath("images/placeholder.png");
         product.setPriceCents(5000L);

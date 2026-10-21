@@ -98,6 +98,7 @@ class SellerTradeFlowTest {
         p.setSellerId(1L);
         p.setCategoryId(categoryId);
         p.setName("只有一个的二手显示器");
+        p.setStock(3);
         p.setDescription("测试用商品");
         p.setImagePath("images/placeholder.png");
         p.setPriceCents(89900L);

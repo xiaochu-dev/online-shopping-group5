@@ -43,7 +43,7 @@
                      th:src="@{'/' + ${img}}"
                      th:alt="${product.name}"
                      class="thumb"
-                     style="cursor:pointer;"
+                     style="cursor:pointer;width:76px;height:76px;object-fit:cover;border-radius:6px;"
                      onclick="document.getElementById('mainImage').src = this.src;">
             </div>
         </div>
@@ -51,7 +51,7 @@
         <!-- 富媒体描述：卖家可用富文本编排图文（T2-12 的白名单过滤由商品中心负责） -->
         <div style="margin-top:16px;" th:if="${product.description != null and !product.description.isEmpty()}">
             <h3>商品描述</h3>
-            <div th:utext="${product.description}">商品描述</div>
+            <div th:replace="~{product/description :: description(${product.description})}"></div>
         </div>
         <p class="muted" th:if="${product.description == null or product.description.isEmpty()}">
             卖家未填写商品描述

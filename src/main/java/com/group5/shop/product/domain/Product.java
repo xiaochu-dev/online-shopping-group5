@@ -24,10 +24,17 @@ public class Product {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    private Integer stock;
+    private String offReason;
+    public Integer getStock() { return stock; }
+    public void setStock(Integer stock) { this.stock = stock; }
+    public String getOffReason() { return offReason; }
+    public void setOffReason(String offReason) { this.offReason = offReason; }
+
     /** 归属卖家 id，用于「我的商品」按人过滤（T2-10） */
     private Long sellerId;
 
-    /** 所属分类 id，可为 null（未分类） */
+    /** 必填的二级分类 id。 */
     private Long categoryId;
 
     private String name;
@@ -41,7 +48,7 @@ public class Product {
     /** 价格，单位「分」。CHECK > 0 */
     private Long priceCents;
 
-    /** on_sale / delisted / frozen，见 {@link ProductStatus} */
+    /** on_sale / frozen / off_shelf；delisted 仅兼容历史记录。 */
     private String status;
 
     private Long publishedAt;
@@ -65,11 +72,13 @@ public class Product {
 
     /** 状态中文名，如「在售」 */
     public String getStatusLabel() {
+        if ("off_shelf".equals(status)) return "已下架";
         return ProductStatus.labelOf(status);
     }
 
     /** 状态徽章 CSS 类，如 tag-green */
     public String getStatusCss() {
+        if ("off_shelf".equals(status)) return "tag-gray";
         return ProductStatus.cssOf(status);
     }
 

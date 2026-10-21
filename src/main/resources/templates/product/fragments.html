@@ -1,0 +1,5 @@
+<!DOCTYPE html><html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:fragment="head(title)"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title th:text="${title}+' · 商品中心'">商品中心</title><link rel="stylesheet" th:href="@{/css/style.css}"><link rel="stylesheet" th:href="@{/css/product.css}"></head>
+<body><div th:fragment="nav" class="topbar"><span class="brand">在线购物系统 · 商品中心</span><nav class="topnav"><a href="/admin">后台首页</a><a href="/admin/products">我的商品</a><a href="/admin/products/new">发布商品</a><a href="/admin/categories">分类管理</a><a href="/admin/intents">交易与意向</a><a href="/">买家门户</a></nav></div>
+<div th:fragment="feedback"><div class="banner banner-ok" th:if="${msg}" th:text="${msg}"></div><div class="banner banner-error" th:if="${error}" th:text="${error}"></div></div>
+</body></html>

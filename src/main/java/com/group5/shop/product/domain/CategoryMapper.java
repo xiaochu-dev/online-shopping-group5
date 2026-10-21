@@ -23,7 +23,7 @@ public interface CategoryMapper extends BaseMapper<Category> {
      *
      * @return 分类列表；无数据返回空列表（不会返回 null）
      */
-    @Select("SELECT id, name, sort_no, status, created_at, updated_at "
+    @Select("SELECT id, parent_id, name, sort_no, status, created_at, updated_at "
             + "FROM category WHERE status = 'enabled' ORDER BY sort_no ASC, id ASC")
     List<Category> selectEnabled();
 }

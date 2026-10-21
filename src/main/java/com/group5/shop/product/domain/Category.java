@@ -19,7 +19,11 @@ public class Category {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    /** 分类名，全局唯一 */
+    private Long parentId;
+    public Long getParentId() { return parentId; }
+    public void setParentId(Long parentId) { this.parentId = parentId; }
+
+    /** 同一父级下唯一；一级分类使用 NULL 父级。 */
     private String name;
 
     /** 下拉框排序号，越小越靠前 */

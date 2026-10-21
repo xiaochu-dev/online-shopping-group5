@@ -39,7 +39,7 @@ public interface ProductMapper extends BaseMapper<Product> {
      * @param status 见 {@link com.group5.shop.common.constant.ProductStatus}
      * @return 条数
      */
-    @Select("SELECT COUNT(*) FROM product WHERE status = #{status}")
+    @Select("SELECT COUNT(*) FROM product WHERE status = #{status} OR (#{status} = 'delisted' AND status = 'off_shelf')")
     long countByStatus(@Param("status") String status);
 
     /**
@@ -49,6 +49,6 @@ public interface ProductMapper extends BaseMapper<Product> {
      * @param status   商品状态
      * @return 条数
      */
-    @Select("SELECT COUNT(*) FROM product WHERE seller_id = #{sellerId} AND status = #{status}")
+    @Select("SELECT COUNT(*) FROM product WHERE seller_id = #{sellerId} AND (status = #{status} OR (#{status} = 'delisted' AND status = 'off_shelf'))")
     long countBySellerIdAndStatus(@Param("sellerId") Long sellerId, @Param("status") String status);
 }
