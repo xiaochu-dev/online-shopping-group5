@@ -1,13 +1,15 @@
 package com.group5.shop;
 
+import com.group5.shop.buyer.context.BuyerContext;
+import com.group5.shop.buyer.domain.Buyer;
 import com.group5.shop.common.constant.IntentStatus;
 import com.group5.shop.common.constant.ProductStatus;
-import com.group5.shop.common.entity.Category;
-import com.group5.shop.common.entity.Intent;
-import com.group5.shop.common.entity.Product;
-import com.group5.shop.common.mapper.CategoryMapper;
-import com.group5.shop.common.mapper.IntentMapper;
-import com.group5.shop.common.mapper.ProductMapper;
+import com.group5.shop.portal.domain.Intent;
+import com.group5.shop.portal.domain.IntentMapper;
+import com.group5.shop.product.domain.Category;
+import com.group5.shop.product.domain.CategoryMapper;
+import com.group5.shop.product.domain.Product;
+import com.group5.shop.product.domain.ProductMapper;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer;
@@ -18,7 +20,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -29,6 +31,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
@@ -43,13 +46,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <b>下单强制登录</b>、买家资料快照、重复提交限制，以及「下架商品不可见」这类
  * 只能靠走完整 DispatcherServlet 链路验证的入口规则。</p>
  *
- * <p>「未登录」与「已登录」通过 {@link TestBuyerContext} 切换，不依赖尚未交付的买家账号模块。</p>
+ * <p>买家身份用 {@code @MockBean} 顶替：登录态归账号与客户模块，门户只消费
+ * {@code BuyerContext.current()} 的结果。这里验证的是「拿到身份之后门户做的事」。</p>
  *
  * @author 周到
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(TestBuyerContext.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class PortalFlowTest {
@@ -76,6 +79,12 @@ class PortalFlowTest {
     @Autowired
     private CategoryMapper categoryMapper;
 
+    @MockBean
+    private BuyerContext buyerContext;
+
+    private static final Long BUYER_ID = 9001L;
+    private static final Long OTHER_BUYER_ID = 9002L;
+
     /** 在售商品：数码电子 */
     private static Long onSaleId;
     /** 在售商品：图书教材 */
@@ -89,18 +98,18 @@ class PortalFlowTest {
 
     @BeforeEach
     void resetLoginState() {
-        TestBuyerContext.reset();
+        when(buyerContext.current()).thenReturn(buyer(BUYER_ID, "测试客户", "13800000000", "图书馆门口"));
     }
 
     /**
      * 造测试数据：两个不同分类的在售商品 + 一个已下架 + 一个交易中。
      *
-     * <p>种子账号与 5 个分类由 {@code schema.sql} 在上下文启动时写入，这里只补商品。</p>
+     * <p>种子账号与 5 个分类由 {@code schema/*.sql} 在上下文启动时写入，这里只补商品。</p>
      */
     @BeforeAll
     void seed() {
         List<Category> categories = categoryMapper.selectEnabled();
-        assertThat(categories).as("schema.sql 应已写入 5 个种子分类").hasSizeGreaterThanOrEqualTo(2);
+        assertThat(categories).as("schema 应已写入种子分类").hasSizeGreaterThanOrEqualTo(2);
         Long digitalId = categories.get(0).getId();
         bookCategoryId = categories.get(1).getId();
 
@@ -108,6 +117,15 @@ class PortalFlowTest {
         textbookId = insertProduct("软件工程实践教材", "2026 版，含实验指导", bookCategoryId, 4550L, ProductStatus.ON_SALE);
         delistedId = insertProduct("已下架的旧款鼠标", "这款应当对买家不可见", digitalId, 9900L, ProductStatus.DELISTED);
         frozenId = insertProduct("正在交易的显示器", "有人正在与卖家成交", digitalId, 89900L, ProductStatus.FROZEN);
+    }
+
+    private Buyer buyer(Long id, String username, String phone, String place) {
+        Buyer buyer = new Buyer();
+        buyer.setId(id);
+        buyer.setUsername(username);
+        buyer.setPhone(phone);
+        buyer.setDefaultPlace(place);
+        return buyer;
     }
 
     private Long insertProduct(String name, String desc, Long categoryId, Long priceCents, String status) {
@@ -237,7 +255,7 @@ class PortalFlowTest {
     @Test
     @Order(9)
     void 未登录提交意向跳买家登录页并带回跳地址() throws Exception {
-        TestBuyerContext.currentId = null;
+        when(buyerContext.current()).thenReturn(null);
 
         mockMvc.perform(post("/products/" + onSaleId + "/intents"))
                 .andExpect(status().is3xxRedirection())
@@ -247,15 +265,13 @@ class PortalFlowTest {
     @Test
     @Order(10)
     void 已登录下单成功并落库买家快照() throws Exception {
-        TestBuyerContext.currentId = TestBuyerContext.BUYER_ID;
-
         mockMvc.perform(post("/products/" + onSaleId + "/intents")
                         .param("tradeAddress", "三食堂门口"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrlPattern("/products/" + onSaleId + "?msg=*"));
 
         Intent saved = intentMapper.selectActiveQueue(onSaleId).stream()
-                .filter(i -> TestBuyerContext.BUYER_ID.equals(i.getBuyerId()))
+                .filter(i -> BUYER_ID.equals(i.getBuyerId()))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("下单应写入一条 pending 意向"));
 
@@ -265,21 +281,18 @@ class PortalFlowTest {
         assertThat(saved.getTradeAddress()).isEqualTo("三食堂门口");
         // 主路径不再生成口令码
         assertThat(saved.getTokenCode()).isNull();
-        // 提交时不扣库存：本用例不关心库存，但至少要保证单据未结束
         assertThat(saved.getFinishedAt()).isNull();
     }
 
     @Test
     @Order(11)
     void 同一买家对同一商品重复提交被拒() throws Exception {
-        TestBuyerContext.currentId = TestBuyerContext.BUYER_ID;
-
         mockMvc.perform(post("/products/" + onSaleId + "/intents"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrlPattern("/products/" + onSaleId + "?error=*"));
 
         long active = intentMapper.selectActiveQueue(onSaleId).stream()
-                .filter(i -> TestBuyerContext.BUYER_ID.equals(i.getBuyerId()))
+                .filter(i -> BUYER_ID.equals(i.getBuyerId()))
                 .count();
         assertThat(active).as("同一买家同一商品最多 1 条未结束意向").isEqualTo(1);
     }
@@ -287,14 +300,15 @@ class PortalFlowTest {
     @Test
     @Order(12)
     void 未填写交易地点时使用注册时的默认地点() throws Exception {
-        TestBuyerContext.currentId = TestBuyerContext.OTHER_BUYER_ID;
+        when(buyerContext.current())
+                .thenReturn(buyer(OTHER_BUYER_ID, "另一位客户", "13900000000", "东门快递点"));
 
         mockMvc.perform(post("/products/" + textbookId + "/intents"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrlPattern("/products/" + textbookId + "?msg=*"));
 
         Intent saved = intentMapper.selectActiveQueue(textbookId).stream()
-                .filter(i -> TestBuyerContext.OTHER_BUYER_ID.equals(i.getBuyerId()))
+                .filter(i -> OTHER_BUYER_ID.equals(i.getBuyerId()))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("下单应写入一条 pending 意向"));
 
@@ -304,8 +318,6 @@ class PortalFlowTest {
     @Test
     @Order(13)
     void 已下架商品不接受新意向() throws Exception {
-        TestBuyerContext.currentId = TestBuyerContext.BUYER_ID;
-
         mockMvc.perform(post("/products/" + delistedId + "/intents"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrlPattern("/products/" + delistedId + "?error=*"));

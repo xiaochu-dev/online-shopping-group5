@@ -1,12 +1,12 @@
 package com.group5.shop.portal.controller;
 
+import com.group5.shop.buyer.context.BuyerContext;
+import com.group5.shop.buyer.domain.Buyer;
 import com.group5.shop.common.api.PageResult;
-import com.group5.shop.common.entity.Product;
 import com.group5.shop.common.exception.BusinessException;
-import com.group5.shop.portal.contract.BuyerContext;
-import com.group5.shop.portal.contract.BuyerProfile;
 import com.group5.shop.portal.domain.ProductView;
 import com.group5.shop.portal.service.PortalService;
+import com.group5.shop.product.domain.Product;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -94,7 +94,7 @@ public class PortalController {
         model.addAttribute("queueSize", portalService.queueSize(id));
         model.addAttribute("msg", msg);
         model.addAttribute("error", error);
-        model.addAttribute("loggedIn", buyerContext.currentId() != null);
+        model.addAttribute("loggedIn", buyerContext.current() != null);
         model.addAttribute("buyerName", currentBuyerName());
         return "portal/product-detail";
     }
@@ -112,19 +112,13 @@ public class PortalController {
     @PostMapping("/products/{id}/intents")
     public String submitIntent(@PathVariable("id") Long id,
                                @RequestParam(value = "tradeAddress", required = false) String tradeAddress) {
-        Long buyerId = buyerContext.currentId();
-        if (buyerId == null) {
-            return "redirect:" + BUYER_LOGIN_PATH + "?redirect=" + encode("/products/" + id);
-        }
-
-        BuyerProfile profile = buyerContext.profile(buyerId);
-        if (profile == null) {
-            // 会话里有 id 但买家资料读不到（账号被删/表未就绪）：当作未登录处理
+        Buyer buyer = buyerContext.current();
+        if (buyer == null) {
             return "redirect:" + BUYER_LOGIN_PATH + "?redirect=" + encode("/products/" + id);
         }
 
         try {
-            portalService.submitOrder(buyerId, profile, id, tradeAddress);
+            portalService.submitOrder(buyer, id, tradeAddress);
             return "redirect:/products/" + id + "?msg="
                     + encode("购买意向已提交，等待卖家确认。可在「我的订单」查看已有结果的订单。");
         } catch (BusinessException e) {
@@ -157,12 +151,8 @@ public class PortalController {
 
     /** 顶栏显示「你好，xxx」；未登录返回 null */
     private String currentBuyerName() {
-        Long buyerId = buyerContext.currentId();
-        if (buyerId == null) {
-            return null;
-        }
-        BuyerProfile profile = buyerContext.profile(buyerId);
-        return profile == null ? null : profile.username();
+        Buyer buyer = buyerContext.current();
+        return buyer == null ? null : buyer.getUsername();
     }
 
     /** 中文提示参数必须按 UTF-8 编码，否则在重定向 URL 里会变成乱码或被截断 */

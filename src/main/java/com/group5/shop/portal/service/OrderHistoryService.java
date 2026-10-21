@@ -1,11 +1,11 @@
 package com.group5.shop.portal.service;
 
 import com.group5.shop.common.api.PageResult;
-import com.group5.shop.common.entity.Intent;
-import com.group5.shop.common.entity.Product;
-import com.group5.shop.common.mapper.IntentMapper;
-import com.group5.shop.common.mapper.ProductMapper;
+import com.group5.shop.portal.domain.Intent;
+import com.group5.shop.portal.domain.IntentMapper;
 import com.group5.shop.portal.domain.OrderItem;
+import com.group5.shop.product.domain.Product;
+import com.group5.shop.product.domain.ProductMapper;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;

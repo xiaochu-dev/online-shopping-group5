@@ -21,19 +21,23 @@ import java.util.Map;
  * <p>把迭代 2 基线的 {@code intent} 升级成挑战需求 A 需要的结构，脚本见
  * {@code classpath:schema/03-intent.sql}。</p>
  *
- * <h2>为什么需要这个类，而不是把 SQL 塞进 schema.sql</h2>
+ * <h2>为什么需要这个类，而不是只靠 schema/03-intent.sql</h2>
  * <ol>
- *   <li><b>SQLite 改不了约束</b>：{@code token_code} 要从 NOT NULL 改成可空，只能重建整张表，
- *       而重建脚本（CREATE 新表 → 搬数据 → DROP 旧表 → RENAME）<b>不能重复执行</b>，
- *       放进每次启动都跑的 {@code schema.sql} 里，第二次启动就会报表已存在；</li>
- *   <li><b>表 owner 是模块，不是基座</b>：{@code schema.sql} 是组长维护的公共脚本，
- *       intent 的 DDL 归买家门户模块，本类按「一个表只有一个 owner」落在自己包里；</li>
- *   <li><b>幂等靠结构判断</b>：以 {@code buyer_id} 是否已存在作为「迁移过」的标记，
- *       已迁移的库启动时直接跳过，不做任何写操作。</li>
+ *   <li><b>建表脚本只能新建、改不了旧表</b>：{@code 03-intent.sql} 全是
+ *       {@code CREATE ... IF NOT EXISTS}，对<b>已经存在</b>的旧库是空操作；
+ *       老开发机上的 {@code intent} 还是「无 buyer_id、token_code NOT NULL」的形状，
+ *       不处理就会在「下单不生成口令码」这一步写库失败；</li>
+ *   <li><b>SQLite 改不了约束</b>：{@code token_code} 从 NOT NULL 改可空没有 ALTER 可用，
+ *       只能重建整张表；</li>
+ *   <li><b>表 owner 是模块，不是基座</b>：判定与迁移逻辑放在 intent 的 owner 包里，
+ *       基座的 {@code schema/*.sql} 保持纯建表，别人不用关心我的表怎么演进。</li>
  * </ol>
  *
- * <p><b>注意</b>：本类只做一次性结构迁移，不承担数据修补。存量匿名意见按澄清结论
- * 不并入任何客户，{@code buyer_id} 统一落 0。</p>
+ * <p><b>数据取舍</b>：重建会清空 intent。按《挑战需求A-澄清问答记录》，存量匿名意向
+ * 不并入任何客户，清空即符合口径；商品与账号数据不受影响。</p>
+ *
+ * <p><b>幂等</b>：以 {@code buyer_id} 是否已存在作为「迁移过」的标记，
+ * 已迁移的库启动时只做一次 {@code PRAGMA} 探测，不写库。</p>
  *
  * @author 周到
  */
@@ -47,7 +51,7 @@ public class IntentSchemaMigrator implements ApplicationRunner {
     private static final String SENTINEL_TABLE = "intent";
     private static final String SENTINEL_COLUMN = "buyer_id";
 
-    /** 迁移脚本位置（与 schema.sql 同目录，按 01/02/03 编号区分 owner） */
+    /** 迁移脚本位置（与 00/01/02 同目录，编号即 owner 划分） */
     private static final String SCRIPT_LOCATION = "schema/03-intent.sql";
 
     private final JdbcTemplate jdbc;
@@ -64,13 +68,16 @@ public class IntentSchemaMigrator implements ApplicationRunner {
             return;
         }
         if (!tableExists(SENTINEL_TABLE)) {
-            // 全新库：schema.sql 还没建 intent（不该发生），跳过并提示，避免启动即崩
-            log.warn("未找到 intent 表，跳过一次结构迁移；请确认 schema.sql 已正确执行");
+            // 全新库：schema/03-intent.sql 还没来得及建表（不该发生），跳过并提示，避免启动即崩
+            log.warn("未找到 intent 表，跳过一次结构迁移；请确认 schema/03-intent.sql 已正确执行");
             return;
         }
 
         List<String> statements = readStatements();
         log.info("开始迁移 intent 表：{} 条语句（重建表以放开 token_code 非空约束）", statements.size());
+        // 旧表结构与新 DDL 不兼容（缺列 + 多了 NOT NULL），整表重建；
+        // 旧数据是匿名意向，按澄清结论不保留
+        jdbc.execute("DROP TABLE IF EXISTS intent");
         for (String sql : statements) {
             jdbc.execute(sql);
         }

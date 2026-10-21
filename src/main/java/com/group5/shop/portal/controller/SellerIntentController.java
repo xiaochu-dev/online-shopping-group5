@@ -1,10 +1,10 @@
 package com.group5.shop.portal.controller;
 
-import com.group5.shop.common.entity.Product;
 import com.group5.shop.common.exception.BusinessException;
 import com.group5.shop.portal.contract.SellerContext;
 import com.group5.shop.portal.domain.QueueRow;
 import com.group5.shop.portal.service.SellerIntentService;
+import com.group5.shop.product.domain.Product;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;

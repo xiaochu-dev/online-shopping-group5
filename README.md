@@ -104,7 +104,7 @@ online-shopping-group5/
 │   └── portal/                      ★ 买家门户（周到，T2-11~14，当前为空占位）
 ├── src/main/resources/
 │   ├── application.yml              端口、数据源、MyBatis-Plus、Session
-│   ├── schema.sql                   ★ T2-03 建表脚本（幂等，启动自动执行）
+│   ├── schema/                      ★ T2-03 建表脚本（按模块拆 4 份，幂等，启动按 00→03 自动执行）
 │   ├── static/css/style.css         全站样式（迭代 1 原样复用 + 迭代 2 补充）
 │   ├── static/images/               占位图
 │   └── templates/
@@ -138,7 +138,7 @@ online-shopping-group5/
 | :---: | ------------------------- | ---------------------------------------------------- | --------------------------------------------- |
 | T2-01 | 工程骨架、统一返回体、全局异常           | `pom.xml`、包结构、`ApiResponse`、`GlobalExceptionHandler` | `mvn test` 全绿；访问不存在的路径返回统一错误页                 |
 | T2-02 | SQLite 数据源 + MyBatis-Plus | `application.yml` 数据源、`MybatisPlusConfig`（分页插件）      | `CommonLayerTest#商品应支持完整的增删改查`、`#分页查询应返回真实总数` |
-| T2-03 | 全部建表 SQL                  | `schema.sql`（4 张表 + 6 个索引 + 种子数据）                    | `SchemaIdempotencyTest#建表脚本重复执行应无异常且种子数据不翻倍`  |
+| T2-03 | 全部建表 SQL                  | `schema/00-base.sql`、`01-buyer.sql`、`02-product.sql`、`03-intent.sql`（5 张表 + 索引 + 种子数据） | `SchemaIdempotencyTest#建表脚本重复执行应无异常且种子数据不翻倍`  |
 | T2-04 | API 契约文档                  | `docs/API契约-迭代2.md`                                  | 黄、周按契约并行编码                                    |
 | T2-05 | 登录 + 改密 + 登录拦截            | `AuthController`、`AuthService`、`LoginInterceptor`    | `AuthFlowTest` 15 个用例                         |
 | T2-06 | 公共 Entity / Mapper        | 4 个实体 + 4 个 Mapper + 状态常量                            | `CommonLayerTest` 全部用例                        |

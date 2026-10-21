@@ -2,21 +2,21 @@ package com.group5.shop.portal.service;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.group5.shop.buyer.domain.Buyer;
 import com.group5.shop.common.api.PageResult;
 import com.group5.shop.common.constant.IntentStatus;
 import com.group5.shop.common.constant.ProductStatus;
-import com.group5.shop.common.entity.Intent;
-import com.group5.shop.common.entity.Product;
 import com.group5.shop.common.exception.BusinessException;
 import com.group5.shop.common.exception.ErrorCode;
-import com.group5.shop.common.mapper.IntentMapper;
-import com.group5.shop.common.mapper.ProductMapper;
 import com.group5.shop.common.util.TimeUtils;
-import com.group5.shop.portal.contract.BuyerProfile;
 import com.group5.shop.portal.contract.CategoryNode;
 import com.group5.shop.portal.contract.CategoryPort;
 import com.group5.shop.portal.contract.ProductPort;
+import com.group5.shop.portal.domain.Intent;
+import com.group5.shop.portal.domain.IntentMapper;
 import com.group5.shop.portal.domain.ProductView;
+import com.group5.shop.product.domain.Product;
+import com.group5.shop.product.domain.ProductMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -187,15 +187,15 @@ public class PortalService {
      * <p>三项快照（姓名 / 电话 / 交易地点）在下单这一刻抄进 intent，
      * 客户之后改资料不影响历史单展示。</p>
      *
-     * @param buyerId      登录买家 id（调用方已保证非空）
-     * @param profile      买家资料快照来源
+     * @param buyer        登录买家（账号与客户模块的正式实体，调用方已保证非空）
      * @param productId    商品 id
      * @param tradeAddress 本单交易地点；为空时用买家默认地点
      * @return 新写入的意向
      * @throws BusinessException 商品不可下单、库存为 0、或本人已有未结束的意向
      */
     @Transactional
-    public Intent submitOrder(Long buyerId, BuyerProfile profile, Long productId, String tradeAddress) {
+    public Intent submitOrder(Buyer buyer, Long productId, String tradeAddress) {
+        Long buyerId = buyer.getId();
         Product product = productMapper.selectById(productId);
         if (product == null || !ProductStatus.ON_SALE.equals(product.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "商品不存在或已下架，无法提交意向");
@@ -216,11 +216,11 @@ public class PortalService {
         Intent intent = new Intent();
         intent.setProductId(productId);
         intent.setBuyerId(buyerId);
-        intent.setBuyerName(profile == null ? "" : nullToEmpty(profile.username()));
-        intent.setPhone(profile == null ? "" : profile.phoneOrEmpty());
+        intent.setBuyerName(nullToEmpty(buyer.getUsername()));
+        intent.setPhone(nullToEmpty(buyer.getPhone()));
         intent.setTradeAddress(StringUtils.hasText(tradeAddress)
                 ? tradeAddress.trim()
-                : (profile == null ? "" : profile.placeOrEmpty()));
+                : nullToEmpty(buyer.getDefaultPlace()));
         // 主路径不生成口令码（基线验收物仍可凭存量码撤销）
         intent.setTokenCode(null);
         intent.setStatus(IntentStatus.PENDING);

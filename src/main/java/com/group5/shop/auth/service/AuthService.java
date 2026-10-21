@@ -1,10 +1,10 @@
 package com.group5.shop.auth.service;
 
 import com.group5.shop.auth.security.PasswordHasher;
-import com.group5.shop.common.entity.Seller;
+import com.group5.shop.auth.domain.Seller;
 import com.group5.shop.common.exception.BusinessException;
 import com.group5.shop.common.exception.ErrorCode;
-import com.group5.shop.common.mapper.SellerMapper;
+import com.group5.shop.auth.domain.SellerMapper;
 import com.group5.shop.common.util.TimeUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<!-- 客户管理列表 —— 账号与客户模块：胡成溯（组长）T2-04 / 挑战需求 A.2.3 -->
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('客户管理')}"></head>
+<body>
+<div th:replace="~{fragments/layout :: topbar('customers')}"></div>
+
+<div class="container">
+
+    <div class="banner banner-error" th:if="${error}" th:text="${error}"></div>
+
+    <div class="card">
+        <h2>客户管理</h2>
+        <p class="muted">
+            共 <b th:text="${totalCustomers}">0</b> 位注册客户。展示用户名、电话、默认交易地点与注册时间，
+            按注册时间倒序排列（新注册的排在前面）。
+        </p>
+
+        <form class="inline-form" method="get" th:action="@{/admin/customers}">
+            <input type="text" name="keyword" th:value="${keyword}"
+                   placeholder="按用户名或电话检索" style="min-width: 260px;">
+            <input type="hidden" name="size" th:value="${pageResult.size}">
+            <button type="submit" class="btn btn-primary btn-sm">检索</button>
+            <a class="btn btn-sm" th:href="@{/admin/customers}">清空</a>
+        </form>
+
+        <table class="table" style="margin-top: 12px;">
+            <thead>
+            <tr>
+                <th style="width: 70px;">ID</th>
+                <th>用户名</th>
+                <th>联系电话</th>
+                <th>默认交易地点</th>
+                <th style="width: 150px;">注册时间</th>
+                <th style="width: 90px;">操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="b : ${pageResult.records}">
+                <td th:text="${b.id}">1</td>
+                <td th:text="${b.username}">buyer01</td>
+                <td th:text="${b.phone}">13800000000</td>
+                <td th:text="${b.defaultPlace != null ? b.defaultPlace : '—'}">图书馆门口</td>
+                <td th:text="${#dates.format(new java.util.Date(b.createdAt), 'yyyy-MM-dd HH:mm')}">2026-10-20 22:00</td>
+                <td>
+                    <a class="btn btn-sm" th:href="@{/admin/customers/{id}(id=${b.id})}">详情</a>
+                </td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(pageResult.records)}">
+                <td colspan="6">
+                    <div class="empty-tip">
+                        <span th:if="${keyword != null and !keyword.isEmpty()}">
+                            没有匹配「<span th:text="${keyword}"></span>」的客户。
+                        </span>
+                        <span th:if="${keyword == null or keyword.isEmpty()}">
+                            还没有客户注册。把买家门户地址发给同学注册一个，就能在这里看到。
+                        </span>
+                    </div>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+
+        <div class="pager">
+            <span class="pager-info">
+                第 <b th:text="${pageResult.page}">1</b> / <b th:text="${pageResult.totalPages}">1</b> 页，
+                共 <b th:text="${pageResult.total}">0</b> 条
+            </span>
+            <a class="btn btn-sm" th:if="${pageResult.hasPrev}"
+               th:href="@{/admin/customers(page=${pageResult.page - 1}, size=${pageResult.size}, keyword=${keyword})}">上一页</a>
+            <a class="btn btn-sm" th:if="${pageResult.hasNext}"
+               th:href="@{/admin/customers(page=${pageResult.page + 1}, size=${pageResult.size}, keyword=${keyword})}">下一页</a>
+        </div>
+    </div>
+
+</div>
+</body>
+</html>

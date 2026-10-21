@@ -1,7 +1,8 @@
 package com.group5.shop.portal.controller;
 
+import com.group5.shop.buyer.context.BuyerContext;
+import com.group5.shop.buyer.domain.Buyer;
 import com.group5.shop.common.api.PageResult;
-import com.group5.shop.portal.contract.BuyerContext;
 import com.group5.shop.portal.domain.OrderItem;
 import com.group5.shop.portal.service.OrderHistoryService;
 import org.springframework.stereotype.Controller;
@@ -47,20 +48,15 @@ public class MyOrdersController {
     public String list(@RequestParam(value = "page", required = false) Integer page,
                        @RequestParam(value = "size", required = false) Integer size,
                        Model model) {
-        Long buyerId = buyerContext.currentId();
-        if (buyerId == null) {
+        Buyer buyer = buyerContext.current();
+        if (buyer == null) {
             return "redirect:" + BUYER_LOGIN_PATH + "?redirect=" + encode("/my/orders");
         }
 
-        PageResult<OrderItem> result = orderHistoryService.list(buyerId, page, size);
+        PageResult<OrderItem> result = orderHistoryService.list(buyer.getId(), page, size);
         model.addAttribute("pageResult", result);
-        model.addAttribute("buyerName", buyerName(buyerId));
+        model.addAttribute("buyerName", buyer.getUsername());
         return "portal/my-orders";
-    }
-
-    private String buyerName(Long buyerId) {
-        var profile = buyerContext.profile(buyerId);
-        return profile == null ? null : profile.username();
     }
 
     private String encode(String text) {

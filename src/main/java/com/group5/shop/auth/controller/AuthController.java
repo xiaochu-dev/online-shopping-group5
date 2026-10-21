@@ -2,7 +2,7 @@ package com.group5.shop.auth.controller;
 
 import com.group5.shop.auth.service.AuthService;
 import com.group5.shop.common.constant.SessionKeys;
-import com.group5.shop.common.entity.Seller;
+import com.group5.shop.auth.domain.Seller;
 import com.group5.shop.common.exception.BusinessException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;

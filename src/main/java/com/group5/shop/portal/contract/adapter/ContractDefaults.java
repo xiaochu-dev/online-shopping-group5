@@ -2,16 +2,14 @@ package com.group5.shop.portal.contract.adapter;
 
 import com.group5.shop.common.constant.ProductStatus;
 import com.group5.shop.common.constant.SessionKeys;
-import com.group5.shop.common.entity.Product;
-import com.group5.shop.common.mapper.CategoryMapper;
-import com.group5.shop.common.mapper.ProductMapper;
 import com.group5.shop.common.util.TimeUtils;
-import com.group5.shop.portal.contract.BuyerContext;
-import com.group5.shop.portal.contract.BuyerProfile;
 import com.group5.shop.portal.contract.CategoryNode;
 import com.group5.shop.portal.contract.CategoryPort;
 import com.group5.shop.portal.contract.ProductPort;
 import com.group5.shop.portal.contract.SellerContext;
+import com.group5.shop.product.domain.CategoryMapper;
+import com.group5.shop.product.domain.Product;
+import com.group5.shop.product.domain.ProductMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -47,42 +45,15 @@ public class ContractDefaults {
 
     private static final Logger log = LoggerFactory.getLogger(ContractDefaults.class);
 
-    /** 与账号模块约定的买家会话键名；正式实现落地后此常量随之废弃 */
-    private static final String SESSION_BUYER_ID = "LOGIN_BUYER_ID";
+    /**
+     * 临时适配层，只为「商品中心尚未交付」这一种情况兜底。
+     *
+     * <p><b>已交接</b>：{@code BuyerContext} 已由账号与客户模块（胡成溯 T2-03）正式实现，
+     * 门户直接注入 {@code com.group5.shop.buyer.context.BuyerContext}，本类不再提供。</p>
+     */
 
     // ==================================================================
     // 买家登录态
-    // ==================================================================
-
-    @Bean
-    @ConditionalOnMissingBean(BuyerContext.class)
-    public BuyerContext buyerContextDefault(SchemaCapability caps, PortalProbeMapper probe) {
-        return new BuyerContext() {
-
-            @Override
-            public Long currentId() {
-                Object value = sessionAttribute(SESSION_BUYER_ID);
-                return value == null ? null : toLong(value);
-            }
-
-            @Override
-            public BuyerProfile profile(Long buyerId) {
-                if (buyerId == null || !caps.hasBuyerTable()) {
-                    return null;
-                }
-                Map<String, Object> row = probe.selectBuyer(buyerId);
-                if (row == null) {
-                    return null;
-                }
-                return new BuyerProfile(
-                        toLong(row.get("id")),
-                        str(row.get("username")),
-                        str(row.get("phone")),
-                        str(row.get("default_place")));
-            }
-        };
-    }
-
     // ==================================================================
     // 卖家登录态（现有登录模块已具备，直接复用其会话键）
     // ==================================================================

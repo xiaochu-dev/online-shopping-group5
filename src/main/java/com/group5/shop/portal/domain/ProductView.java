@@ -1,6 +1,6 @@
 package com.group5.shop.portal.domain;
 
-import com.group5.shop.common.entity.Product;
+import com.group5.shop.product.domain.Product;
 
 import java.util.List;
 

@@ -1,4 +1,4 @@
-package com.group5.shop.common.entity;
+package com.group5.shop.portal.domain;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;

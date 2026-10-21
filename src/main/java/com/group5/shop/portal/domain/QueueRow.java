@@ -1,6 +1,6 @@
 package com.group5.shop.portal.domain;
 
-import com.group5.shop.common.entity.Intent;
+import com.group5.shop.portal.domain.Intent;
 
 /**
  * 卖家意向队列的一行（T2-18）。

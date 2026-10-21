@@ -1,9 +1,9 @@
 package com.group5.shop;
 
-import com.group5.shop.common.mapper.CategoryMapper;
-import com.group5.shop.common.mapper.IntentMapper;
-import com.group5.shop.common.mapper.ProductMapper;
-import com.group5.shop.common.mapper.SellerMapper;
+import com.group5.shop.product.domain.CategoryMapper;
+import com.group5.shop.portal.domain.IntentMapper;
+import com.group5.shop.product.domain.ProductMapper;
+import com.group5.shop.auth.domain.SellerMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -66,17 +66,27 @@ class SchemaIdempotencyTest {
 
     @Test
     void 建表脚本重复执行应无异常且种子数据不翻倍() throws Exception {
+        // 迭代 2 起建表脚本按模块拆成四个文件（见 application.yml），
+        // 这里按同样顺序再跑两遍（加上启动时的一遍，共三遍）
+        String[] scripts = {
+                "schema/00-base.sql",
+                "schema/01-buyer.sql",
+                "schema/02-product.sql",
+                "schema/03-intent.sql"
+        };
         try (Connection connection = dataSource.getConnection()) {
-            // 再执行两遍（加上启动时的一遍，共三遍）
-            ScriptUtils.executeSqlScript(connection, new ClassPathResource("schema.sql"));
-            ScriptUtils.executeSqlScript(connection, new ClassPathResource("schema.sql"));
+            for (int round = 0; round < 2; round++) {
+                for (String script : scripts) {
+                    ScriptUtils.executeSqlScript(connection, new ClassPathResource(script));
+                }
+            }
         }
 
-        // 1. 四张业务表齐全（迭代 1 的三张 + 迭代 2 新增的 category）
+        // 1. 五张表齐全（迭代 1 的三张 + 迭代 2 的 category + 本版的 buyer）
         List<String> tables = jdbcTemplate.queryForList(
                 "SELECT name FROM sqlite_master WHERE type = 'table' "
                         + "AND name NOT LIKE 'sqlite_%' ORDER BY name", String.class);
-        assertEquals(List.of("category", "intent", "product", "seller"), tables);
+        assertEquals(List.of("buyer", "category", "intent", "product", "seller"), tables);
 
         // 2. 种子数据不重复插入
         assertEquals(1L, sellerMapper.selectCount(null), "卖家账号只能有一条");
@@ -101,6 +111,15 @@ class SchemaIdempotencyTest {
         List<String> intentColumns = jdbcTemplate.queryForList(
                 "SELECT name FROM pragma_table_info('intent')", String.class);
         assertEquals(true, intentColumns.contains("token_code"));
+
+        // T2-02：buyer 表字段与澄清结论一致（电话必填、不唯一）
+        List<String> buyerColumns = jdbcTemplate.queryForList(
+                "SELECT name FROM pragma_table_info('buyer')", String.class);
+        assertEquals(true, buyerColumns.contains("username"));
+        assertEquals(true, buyerColumns.contains("password_hash"));
+        assertEquals(true, buyerColumns.contains("salt"));
+        assertEquals(true, buyerColumns.contains("phone"));
+        assertEquals(true, buyerColumns.contains("default_place"));
 
         // category 分类字典表存在且三列齐全
         List<String> categoryColumns = jdbcTemplate.queryForList(

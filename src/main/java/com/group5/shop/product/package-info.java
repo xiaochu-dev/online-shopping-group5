@@ -8,13 +8,13 @@
  * <ol>
  *   <li>{@code docs/API契约-迭代2.md} —— 路由、表单字段、重定向约定都写死在那里，照着填即可；</li>
  *   <li>{@code src/main/resources/schema.sql} —— product / category 两张表已建好，字段不要再改；</li>
- *   <li>{@link com.group5.shop.common.entity.Product}、{@link com.group5.shop.common.entity.Category}
+ *   <li>{@link com.group5.shop.product.domain.Product}、{@link com.group5.shop.product.domain.Category}
  *       —— 实体已就绪，直接注入对应 Mapper 使用，<b>不要自己再建一套</b>。</li>
  * </ol>
  *
  * <h2>可直接复用的基座能力</h2>
  * <ul>
- *   <li>{@link com.group5.shop.common.mapper.ProductMapper}、{@link com.group5.shop.common.mapper.CategoryMapper}
+ *   <li>{@link com.group5.shop.product.domain.ProductMapper}、{@link com.group5.shop.product.domain.CategoryMapper}
  *       —— 继承 MyBatis-Plus BaseMapper，增删改查免写 SQL；</li>
  *   <li>{@code CategoryMapper.selectEnabled()} —— 发布页分类下拉框直接用它；</li>
  *   <li>{@link com.group5.shop.common.util.MoneyUtils#yuanToCents(String)} —— 价格「元 → 分」，
