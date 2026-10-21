@@ -1,0 +1,11 @@
+<!DOCTYPE html><html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"><head th:replace="~{product/fragments::head('发布商品')}"></head><body>
+<div th:replace="~{product/fragments::nav}"></div><main class="container"><div th:replace="~{product/fragments::feedback}"></div><h1>发布商品</h1><p class="muted">发布后仅支持调整库存与上下架，请先核对名称、价格和图片。</p>
+<form id="publish-form" action="/admin/products" method="post" enctype="multipart/form-data" class="card">
+<div class="product-fields"><label>商品名称 <input name="name" required maxlength="120" placeholder="例如：九成新机械键盘"></label><label>价格（元） <input name="price" type="number" required min="0.01" step="0.01" placeholder="29.90"></label><label>库存数量 <input name="stock" type="number" required min="0" max="2147483647" step="1" value="1"></label><label>二级分类 <select name="categoryId" required><option value="">请选择二级分类</option><optgroup th:each="top:${tree}" th:label="${top.name}"><option th:each="child:${top.children}" th:value="${child.id}" th:text="${child.name}"></option></optgroup></select></label></div>
+<p class="muted">库存为 0 时保存为自动下架；若没有二级分类，请先到分类管理中新增。</p>
+<h2>商品图片</h2><label>选择图片（最多9张，单张不超过5MB）<input id="images" name="images" type="file" multiple accept=".jpg,.jpeg,.png"></label><div id="gallery" class="product-gallery"></div>
+<p class="muted">可以在发布前调整顺序并选择主图；不上传时使用占位图。</p>
+<h2>商品描述</h2><div class="product-inline editor-toolbar"><button type="button" data-command="bold">加粗</button><button type="button" data-command="insertParagraph">分段</button><button type="button" data-command="insertUnorderedList">列表</button><button type="button" id="insert-image">插入图片</button><button type="button" id="insert-video">嵌入视频</button></div>
+<div id="editor" contenteditable="true" role="textbox" aria-label="商品描述" class="product-editor"></div><input type="hidden" name="description" id="description">
+<p class="muted">视频支持 Bilibili 播放器或 YouTube 嵌入地址；图片支持 HTTP / HTTPS 地址。</p><button class="btn btn-primary" type="submit">核对并发布</button>
+</form><dialog id="publish-confirm"><h2>确认发布</h2><p>请核对商品信息，发布后名称、价格与图片将不能修改。</p><p id="confirm-summary"></p><button type="button" id="cancel-publish" class="btn">返回核对</button> <button type="button" id="confirm-publish" class="btn btn-primary">确认发布</button></dialog></main><script src="/js/product-publish.js?v=2"></script></body></html>

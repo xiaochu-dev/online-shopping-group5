@@ -1,0 +1,13 @@
+<!DOCTYPE html><html lang="zh-CN" xmlns:th="http://www.thymeleaf.org"><head th:replace="~{product/fragments::head('我的商品')}"></head><body>
+<div th:replace="~{product/fragments::nav}"></div><main class="container"><div th:replace="~{product/fragments::feedback}"></div>
+<div class="product-heading"><div><h1>我的商品</h1><p class="muted">管理库存与上下架，交易结果在意向队列中处理。</p></div><a class="btn btn-primary" href="/admin/products/new">发布商品</a></div>
+<form method="get" class="card product-inline"><label>状态 <select name="status" onchange="this.form.submit()"><option value="">全部状态</option><option th:each="s:${ {'on_sale','frozen','off_shelf','delisted'} }" th:value="${s}" th:selected="${s==selectedStatus}" th:text="${s=='on_sale'?'在售':(s=='frozen'?'交易中':(s=='delisted'?'历史下架':'已下架'))}"></option></select></label></form>
+<div class="card" th:if="${products.isEmpty()}"><p>还没有符合条件的商品。</p></div>
+<article class="card product-row" th:each="p:${products}">
+<img class="product-cover" th:src="@{'/'+${p.imagePath}}" th:alt="${p.name}">
+<div class="product-main"><h2 th:text="${p.name}"></h2><p><strong th:text="'¥ '+${p.priceYuan}"></strong> <span class="tag" th:classappend="${p.statusCss}" th:text="${p.statusLabel}"></span> <span th:if="${p.offReason!=null}" th:text="${p.offReason=='auto'?'库存归零自动下架':'卖家手动下架'}"></span></p><p>当前库存：<b th:text="${p.stock}"></b></p>
+<div class="product-inline"><form th:action="@{/admin/products/{id}/stock(id=${p.id})}" method="post"><label>调整库存 <input name="stock" type="number" min="0" max="2147483647" required th:value="${p.stock}"></label><button class="btn">保存库存</button></form>
+<form th:action="@{/admin/products/{id}/off-shelf(id=${p.id})}" method="post" th:if="${p.status=='on_sale' or p.status=='frozen'}"><button class="btn">手动下架</button></form>
+<form th:action="@{/admin/products/{id}/relist(id=${p.id})}" method="post" th:if="${p.status=='off_shelf' or p.status=='delisted'}"><button class="btn btn-primary" th:disabled="${p.stock==0}">重新上架</button></form>
+<a class="btn" th:href="@{/admin/intents/{id}(id=${p.id})}">查看意向</a></div></div></article>
+</main></body></html>

@@ -86,7 +86,7 @@ class SchemaIdempotencyTest {
         List<String> tables = jdbcTemplate.queryForList(
                 "SELECT name FROM sqlite_master WHERE type = 'table' "
                         + "AND name NOT LIKE 'sqlite_%' ORDER BY name", String.class);
-        assertEquals(List.of("buyer", "category", "intent", "product", "seller"), tables);
+        assertEquals(List.of("buyer", "category", "intent", "product", "product_image", "seller"), tables);
 
         // 2. 种子数据不重复插入
         assertEquals(1L, sellerMapper.selectCount(null), "卖家账号只能有一条");
