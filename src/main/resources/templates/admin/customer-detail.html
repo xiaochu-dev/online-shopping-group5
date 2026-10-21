@@ -43,8 +43,8 @@
         <h2>购买历史</h2>
 
         <div class="empty-tip" th:if="${!historyReady}">
-            交易模块（portal）尚未接入购买历史查询，暂无数据可显示。<br>
-            接入后本区将列出该客户每一次已结束的订单及其结果（成功 / 失败、失败原因）。
+            暂未读取到该客户的购买历史，请稍后刷新重试。<br>
+            正常时本区会列出该客户每一次已结束的订单及其结果（成功 / 失败、失败原因）。
         </div>
 
         <div class="empty-tip" th:if="${historyReady and #lists.isEmpty(history)}">
