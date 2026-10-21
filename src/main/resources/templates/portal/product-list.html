@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<!-- 买家商品列表 —— 买家门户：周到（T2-11 列表 / T2-12 搜索） -->
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{portal/fragments :: head('全部商品')}"></head>
+<body>
+<div th:replace="~{portal/fragments :: buyerTopbar('list')}"></div>
+
+<div class="container">
+
+    <!-- 操作反馈：与全项目约定一致（?msg=成功 / ?error=失败） -->
+    <div class="banner banner-ok" th:if="${msg}" th:text="${msg}"></div>
+    <div class="banner banner-error" th:if="${error}" th:text="${error}"></div>
+
+    <!-- ==================== 搜索与分类筛选（T2-12） ==================== -->
+    <div class="card">
+        <h2>找商品</h2>
+        <form method="get" th:action="@{/}">
+            <div class="form-row">
+                <label for="keyword">关键词</label>
+                <input type="text" id="keyword" name="keyword" th:value="${keyword}"
+                       placeholder="输入商品名称或描述中的字，如「键盘」「1080P」">
+            </div>
+            <div class="form-row">
+                <label for="categoryId">分类</label>
+                <select id="categoryId" name="categoryId">
+                    <option value="">全部分类</option>
+                    <option th:each="c : ${categories}"
+                            th:value="${c.id}"
+                            th:text="${c.name}"
+                            th:selected="${categoryId != null and categoryId == c.id}">分类</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">搜索</button>
+            <a class="btn" th:href="@{/}" th:if="${keyword != '' or categoryId != null}">清空条件</a>
+        </form>
+    </div>
+
+    <!-- ==================== 商品列表（T2-11） ==================== -->
+    <p class="muted" th:if="${pageResult.total > 0}">
+        共 <b th:text="${pageResult.total}">0</b> 件在售商品
+        <span th:if="${keyword != ''}">，关键词「<b th:text="${keyword}">—</b>」</span>
+        <span th:if="${categoryId != null}">，已按分类筛选</span>
+    </p>
+
+    <!-- 空态：区分「有筛选条件但没结果」与「一件都没在售」 -->
+    <div class="card empty-tip" th:if="${pageResult.total == 0}">
+        <p th:if="${keyword != '' or categoryId != null}">没有找到符合条件的商品</p>
+        <p th:unless="${keyword != '' or categoryId != null}">暂无商品在售</p>
+        <p class="muted" th:if="${keyword != '' or categoryId != null}">
+            试试换个关键词，或<a th:href="@{/}">查看全部商品</a>。
+        </p>
+    </div>
+
+    <div class="card product-card" th:each="p : ${pageResult.records}">
+        <div class="product-row">
+            <a th:href="@{'/products/' + ${p.id}}">
+                <img class="thumb" th:src="@{'/' + ${p.imagePath}}" th:alt="${p.name}">
+            </a>
+            <div class="product-info" style="flex:1;">
+                <div class="product-title">
+                    <a th:href="@{'/products/' + ${p.id}}" th:text="${p.name}"
+                       style="text-decoration:none;color:inherit;">商品名称</a>
+                </div>
+                <p>
+                    <span class="price" th:text="'¥ ' + ${p.priceYuan}">¥ 0.00</span>
+                    <span class="tag tag-blue"
+                          th:text="${categoryNames.get(p.categoryId)} ?: '未分类'">未分类</span>
+                    <span class="tag tag-green" th:text="${p.statusLabel}">在售</span>
+                </p>
+                <p class="product-desc" th:if="${p.description != null and !p.description.isEmpty()}"
+                   th:text="${#strings.abbreviate(p.description, 60)}">商品描述</p>
+                <p class="muted" th:if="${p.description == null or p.description.isEmpty()}">卖家未填写商品描述</p>
+                <a class="btn btn-sm btn-primary" th:href="@{'/products/' + ${p.id}}">查看详情 · 提交购买意向</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 分页 ==================== -->
+    <div class="pager" th:if="${pageResult.totalPages > 1}">
+        <a class="btn btn-sm" th:if="${pageResult.hasPrev}"
+           th:href="@{/(page=${pageResult.page - 1}, size=${pageResult.size}, categoryId=${categoryId}, keyword=${keyword})}">上一页</a>
+        <span class="pager-info"
+              th:text="'第 ' + ${pageResult.page} + ' / ' + ${pageResult.totalPages} + ' 页'">第 1 / 1 页</span>
+        <a class="btn btn-sm" th:if="${pageResult.hasNext}"
+           th:href="@{/(page=${pageResult.page + 1}, size=${pageResult.size}, categoryId=${categoryId}, keyword=${keyword})}">下一页</a>
+    </div>
+
+    <!-- ==================== 凭口令码撤销（T2-14） ==================== -->
+    <div class="card">
+        <h2>凭口令码撤销意向</h2>
+        <p class="muted">
+            提交意向时页面会显示一串口令码，请自行保存。只有<strong>仍在排队中</strong>的意向可以撤销；
+            已经进入交易或已结束的意向无法撤销。
+        </p>
+        <form method="post" th:action="@{/intents/cancel}" class="inline-form">
+            <input type="text" name="tokenCode" placeholder="粘贴你的口令码" required
+                   style="min-width:340px;font-family:Consolas,monospace;">
+            <button type="submit" class="btn btn-warning">撤销该意向</button>
+        </form>
+    </div>
+
+</div>
+</body>
+</html>
