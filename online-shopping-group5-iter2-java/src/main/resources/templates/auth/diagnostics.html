@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<!-- 基座自检页 —— 平台基座：胡成溯（组长）T2-02 / T2-03 / T2-06 的现场验收证据 -->
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('基座自检')}"></head>
+<body>
+<div th:replace="~{fragments/layout :: topbar('diagnostics')}"></div>
+
+<div class="container">
+
+    <div class="card">
+        <h2>运行环境</h2>
+        <table class="table">
+            <tbody>
+            <tr>
+                <th style="width: 180px;">数据源 URL</th>
+                <td><code th:text="${datasourceUrl}">jdbc:sqlite:./data/shop.db</code></td>
+            </tr>
+            <tr>
+                <th>数据库文件</th>
+                <td>
+                    <span class="tag tag-green" th:if="${dbFileExists}">data/shop.db 已生成</span>
+                    <span class="tag tag-red" th:unless="${dbFileExists}">数据库文件不存在</span>
+                </td>
+            </tr>
+            <tr>
+                <th>JDK 版本</th>
+                <td th:text="${javaVersion}">17</td>
+            </tr>
+            <tr>
+                <th>操作系统</th>
+                <td th:text="${osName}">Windows</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>数据表结构（来自 SQLite 实时查询）</h2>
+        <p class="muted" style="margin-bottom: 12px;">
+            下表由 <code>sqlite_master</code> + <code>PRAGMA table_info</code> 实时读取，
+            不是写死的文档——表在库里长什么样，这里就显示什么样。
+        </p>
+
+        <div th:each="t : ${tables}" style="margin-bottom: 22px;">
+            <h3>
+                <code th:text="${t.name}">product</code>
+                <span class="tag tag-blue" th:text="${t.rowCount} + ' 行'">0 行</span>
+            </h3>
+            <table class="table">
+                <thead>
+                <tr>
+                    <th>#</th>
+                    <th>列名</th>
+                    <th>类型</th>
+                    <th>非空</th>
+                    <th>默认值</th>
+                    <th>主键</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="c : ${t.columns}">
+                    <td th:text="${c.cid}">0</td>
+                    <td><code th:text="${c.name}">id</code></td>
+                    <td th:text="${c.type}">INTEGER</td>
+                    <td th:text="${c.notnull == 1} ? '是' : ''"></td>
+                    <td th:text="${c.dflt_value}"></td>
+                    <td th:text="${c.pk == 1} ? 'PK' : ''"></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>分类字典（发布页下拉框数据源）</h2>
+        <table class="table">
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>分类名称</th>
+                <th>排序号</th>
+                <th>状态</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="c : ${categories}">
+                <td th:text="${c.id}">1</td>
+                <td th:text="${c.name}">数码电子</td>
+                <td th:text="${c.sortNo}">1</td>
+                <td><span class="tag tag-green" th:text="${c.statusLabel}">启用</span></td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(categories)}">
+                <td colspan="4" class="muted">暂无启用的分类</td>
+            </tr>
+            </tbody>
+        </table>
+        <p class="muted">
+            分类维护页由黄程宇负责（T2-09），新增 / 修改分类后本页会自动更新。
+        </p>
+    </div>
+
+</div>
+</body>
+</html>

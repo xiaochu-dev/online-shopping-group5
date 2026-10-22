@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<!-- 商品详情与提交意向 —— 买家门户：周到（T2-15 详情 / T2-16 下单） -->
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{portal/fragments :: head(${product.name})}"></head>
+<body>
+<div th:replace="~{portal/fragments :: buyerTopbar('detail')}"></div>
+
+<div class="container">
+
+    <p><a th:href="@{/}">← 返回商品列表</a></p>
+
+    <div class="banner banner-ok" th:if="${msg}" th:text="${msg}"></div>
+    <div class="banner banner-error" th:if="${error}" th:text="${error}"></div>
+
+    <!-- ==================== 商品信息 ==================== -->
+    <div class="card">
+        <div class="product-row">
+            <!-- 主图：图集第一张（多图未就绪时回落商品主图） -->
+            <img id="mainImage" class="thumb thumb-large" th:src="@{'/' + ${view.cover()}}" th:alt="${product.name}">
+            <div class="product-info" style="flex:1;">
+                <h2 style="margin-bottom:10px;" th:text="${product.name}">商品名称</h2>
+                <p>
+                    <span class="price" th:text="'¥ ' + ${product.priceYuan}">¥ 0.00</span>
+                    <span class="tag tag-green" th:text="${product.statusLabel}">在售</span>
+                    <span class="tag tag-red" th:if="${view.frozen()}">交易中</span>
+                    <span class="tag tag-gray" th:if="${view.soldOut()}">已售罄</span>
+                </p>
+                <p class="muted" th:if="${view.stock() != null}">
+                    可售库存：<b th:text="${view.stock()}">0</b> 件
+                </p>
+                <p class="muted">
+                    当前有 <b th:text="${queueSize}">0</b> 人在排队。
+                    本系统按<strong>提交时间先到先得</strong>，越早提交排得越前。
+                </p>
+            </div>
+        </div>
+
+        <!-- 多图：缩略图条（T2-15）。点击后把主图换成它，纯前端小脚本，不刷新页面 -->
+        <div th:if="${view.hasGallery()}" style="margin-top:14px;">
+            <p class="muted">商品图片（共 <b th:text="${view.images().size()}">1</b> 张）</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <img th:each="img : ${view.images()}"
+                     th:src="@{'/' + ${img}}"
+                     th:alt="${product.name}"
+                     class="thumb"
+                     style="cursor:pointer;width:76px;height:76px;object-fit:cover;border-radius:6px;"
+                     onclick="document.getElementById('mainImage').src = this.src;">
+            </div>
+        </div>
+
+        <!-- 富媒体描述：卖家可用富文本编排图文（T2-12 的白名单过滤由商品中心负责） -->
+        <div style="margin-top:16px;" th:if="${product.description != null and !product.description.isEmpty()}">
+            <h3>商品描述</h3>
+            <div th:replace="~{product/description :: description(${product.description})}"></div>
+        </div>
+        <p class="muted" th:if="${product.description == null or product.description.isEmpty()}">
+            卖家未填写商品描述
+        </p>
+    </div>
+
+    <!-- ==================== 提交购买意向（必须登录，T2-16） ==================== -->
+    <div class="card">
+        <h2>提交购买意向</h2>
+
+        <!-- 已登录：直接下单 -->
+        <form th:if="${loggedIn and view.tradable()}"
+              method="post"
+              th:action="@{'/products/' + ${product.id} + '/intents'}"
+              class="form-narrow">
+            <p class="muted">
+                下单身份为你的登录账号，姓名与电话自动取自注册资料。
+                提交后请等待卖家确认；成交与否的结果会出现在「我的订单」里。
+            </p>
+            <div class="form-row">
+                <label for="tradeAddress">交易地点（必填）</label>
+                <input type="text" id="tradeAddress" name="tradeAddress"
+                       maxlength="100"
+                       placeholder="例如：三食堂门口 / 西门快递柜；留空则使用注册资料里的默认交易地点">
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">提交意向，进入排队</button>
+        </form>
+
+        <!-- 未登录：引导登录，带回跳地址 -->
+        <div th:if="${!loggedIn and view.tradable()}">
+            <p class="muted">
+                购买商品需要先注册并登录。浏览商品无需登录，提交购买意向时必须登录身份。
+            </p>
+            <a class="btn btn-primary" th:href="@{/buyer/login(redirect=${'/products/' + product.id})}">
+                登录后购买
+            </a>
+        </div>
+
+        <!-- 不可下单：交易中 / 售罄 -->
+        <div th:if="${!view.tradable()}">
+            <p class="frozen-tip" th:text="${view.statusTip()}">暂时无法提交意向</p>
+            <a class="btn" th:href="@{/}">看看其他商品</a>
+        </div>
+    </div>
+
+</div>
+</body>
+</html>

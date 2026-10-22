@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<!-- 统一错误页（T2-01 全局异常处理的页面出口） -->
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('出错了')}"></head>
+<body class="center-page">
+<div class="card card-narrow">
+    <h1 th:text="${code} ?: '出错了'">40001</h1>
+    <p class="subtitle" th:text="${message} ?: '请求处理失败'">参数不合法</p>
+
+    <p class="muted" style="text-align:center; margin-bottom: 16px;"
+       th:if="${path}" th:text="'请求路径：' + ${path}"></p>
+
+    <div class="center-text">
+        <a class="btn btn-primary" th:href="@{/admin}">返回后台首页</a>
+        <a class="btn" th:href="@{/login}">去登录</a>
+    </div>
+</div>
+</body>
+</html>

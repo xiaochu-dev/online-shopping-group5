@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<!-- 买家注册页 —— 账号与客户模块：胡成溯（组长）T2-02 / 挑战需求 A.2.1 -->
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('买家注册')}"></head>
+<body class="center-page">
+<div class="card card-narrow">
+    <h1>买家注册</h1>
+    <p class="subtitle">注册后即可提交购买意向、查看我的订单</p>
+
+    <div class="banner banner-error" th:if="${error}" th:text="${error}">用户名已被注册</div>
+
+    <form method="post" th:action="@{/buyer/register}">
+        <div class="form-row">
+            <label for="username">用户名 <span class="req">*</span></label>
+            <input type="text" id="username" name="username" autocomplete="username"
+                   required autofocus minlength="2" maxlength="20"
+                   placeholder="2~20 个字符，登录时使用" th:value="${username}">
+        </div>
+
+        <div class="form-row">
+            <label for="password">密码 <span class="req">*</span></label>
+            <input type="password" id="password" name="password"
+                   autocomplete="new-password" required minlength="8"
+                   placeholder="至少 8 位">
+        </div>
+
+        <div class="form-row">
+            <label for="confirmPassword">确认密码 <span class="req">*</span></label>
+            <input type="password" id="confirmPassword" name="confirmPassword"
+                   autocomplete="new-password" required minlength="8"
+                   placeholder="再输入一次密码">
+        </div>
+
+        <div class="form-row">
+            <label for="phone">联系电话 <span class="req">*</span></label>
+            <input type="text" id="phone" name="phone" maxlength="20"
+                   required placeholder="便于卖家联系你，可与其他账号相同"
+                   th:value="${phone}">
+        </div>
+
+        <div class="form-row">
+            <label for="defaultPlace">默认交易地点</label>
+            <input type="text" id="defaultPlace" name="defaultPlace" maxlength="100"
+                   placeholder="选填，下单时会自动带出" th:value="${defaultPlace}">
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">注册</button>
+    </form>
+
+    <p class="muted login-tip">
+        已有账号？<a th:href="@{/buyer/login}">直接登录</a>
+    </p>
+</div>
+</body>
+</html>

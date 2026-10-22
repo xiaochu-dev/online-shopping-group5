@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<!--
+  公共布局片段（Thymeleaf Fragment）
+  =============================================
+  用法：
+    <head th:replace="~{fragments/layout :: head('登录')}"></head>
+    <div th:replace="~{fragments/layout :: topbar('home')}"></div>
+  各模块（product / portal）如需新增顶栏入口，请在自己模块的模板里
+  用 th:replace 传入自己的 active 值，不要改本文件的公共部分。
+-->
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+
+<!-- ==================== 片段 1：<head> ==================== -->
+<head th:fragment="head(pageTitle)">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${pageTitle} + ' · 在线购物系统'">在线购物系统</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+
+<body>
+
+<!-- ==================== 片段 2：顶栏 ==================== -->
+<div th:fragment="topbar(active)" class="topbar">
+    <span class="brand">在线购物系统 · 第 5 组</span>
+    <nav class="topnav">
+        <a th:href="@{/admin}" th:classappend="${active == 'home'} ? 'nav-active' : ''">后台首页</a>
+        <a th:href="@{/admin/products}" th:classappend="${active == 'products'} ? 'nav-active' : ''">我的商品</a>
+        <a th:href="@{/admin/products/new}" th:classappend="${active == 'publish'} ? 'nav-active' : ''">发布商品</a>
+        <a th:href="@{/admin/intents}" th:classappend="${active == 'intents'} ? 'nav-active' : ''">交易与意向</a>
+        <a th:href="@{/admin/customers}" th:classappend="${active == 'customers'} ? 'nav-active' : ''">客户管理</a>
+        <a th:href="@{/admin/diagnostics}" th:classappend="${active == 'diagnostics'} ? 'nav-active' : ''">基座自检</a>
+        <a th:href="@{/}" th:classappend="${active == 'portal'} ? 'nav-active' : ''">买家门户</a>
+        <a th:href="@{/logout}" class="nav-logout">退出登录</a>
+    </nav>
+</div>
+
+</body>
+</html>

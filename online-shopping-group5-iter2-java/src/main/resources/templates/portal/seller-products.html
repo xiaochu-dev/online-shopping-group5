@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<!-- 卖家的「我的商品」与待处理意向入口 —— 买家门户与交易：周到（T2-18） -->
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{portal/fragments :: head('交易与意向')}"></head>
+<body>
+<div th:replace="~{portal/fragments :: adminTopbar('intents')}"></div>
+
+<div class="container">
+
+    <div class="banner banner-ok" th:if="${msg}" th:text="${msg}"></div>
+    <div class="banner banner-error" th:if="${error}" th:text="${error}"></div>
+
+    <h2>交易与意向</h2>
+    <p class="muted">
+        按商品查看排队情况并确认交易。<strong>先到先得</strong>：只能从队首开始处理。
+        确认交易后商品进入「交易中」，其他买家暂时无法下单；标记成功会扣减 1 件库存。
+    </p>
+
+    <div class="card empty-tip" th:if="${products == null or products.isEmpty()}">
+        <p>你还没有发布商品</p>
+        <p class="muted">商品发布在商品中心（待 T2-09 合入后提供入口）。</p>
+    </div>
+
+    <div class="card" th:if="${products != null and !products.isEmpty()}">
+        <table class="table">
+            <thead>
+            <tr>
+                <th>商品</th>
+                <th>价格</th>
+                <th>状态</th>
+                <th>待处理意向</th>
+                <th>操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="p : ${products}">
+                <td>
+                    <div class="product-row" style="gap:10px;">
+                        <img class="thumb" th:src="@{'/' + ${p.imagePath}}" th:alt="${p.name}">
+                        <span th:text="${p.name}">商品名</span>
+                    </div>
+                </td>
+                <td th:text="'¥ ' + ${p.priceYuan}">¥ 0.00</td>
+                <td>
+                    <span class="tag" th:classappend="${p.statusCss}" th:text="${p.statusLabel}">在售</span>
+                </td>
+                <td>
+                    <span class="badge-lg" th:if="${(counts.get(p.id) ?: 0) > 0}"
+                          th:text="${counts.get(p.id)} + ' 条待处理'">0 条待处理</span>
+                    <span class="muted" th:if="${(counts.get(p.id) ?: 0) == 0}">无</span>
+                </td>
+                <td>
+                    <a class="btn btn-sm btn-primary" th:href="@{'/admin/intents/' + ${p.id}}">查看队列</a>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+</div>
+</body>
+</html>

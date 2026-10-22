@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<!--
+  买家门户公共片段（T2-13 ~ T2-18，负责人：周到）
+  ==========================================
+  为什么不复用 fragments/layout.html 的 topbar：
+  那条顶栏是卖家后台视角（后台首页 / 基座自检 / 退出登录），
+  放进买家页面会要求买家去点「退出登录」，逻辑上讲不通。
+  按 layout.html 注释的约定，各模块自带入口，不改公共文件的公共部分。
+-->
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+
+<!-- ==================== 片段 1：<head> ==================== -->
+<head th:fragment="head(pageTitle)">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${pageTitle} + ' · 在线购物系统'">在线购物系统</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+
+<body>
+
+<!-- ==================== 片段 2：买家顶栏 ==================== -->
+<div th:fragment="buyerTopbar(active)" class="topbar">
+    <span class="brand">在线购物系统 · 第 5 组</span>
+    <nav class="topnav">
+        <a th:href="@{/}" th:classappend="${active == 'list'} ? 'nav-active' : ''">全部商品</a>
+        <a th:href="@{/my/orders}" th:classappend="${active == 'orders'} ? 'nav-active' : ''">我的订单</a>
+        <!-- 未登录时不显示「我的订单」的登录态提示，登录入口由账号模块提供 -->
+        <span class="muted" th:if="${buyerName}" th:text="'你好，' + ${buyerName}">你好</span>
+        <a th:href="@{/admin}" th:classappend="${active == 'admin'} ? 'nav-active' : ''">卖家后台</a>
+    </nav>
+</div>
+
+<!-- ==================== 片段 3：卖家后台顶栏（T2-18 使用） ==================== -->
+<div th:fragment="adminTopbar(active)" class="topbar">
+    <span class="brand">在线购物系统 · 卖家后台</span>
+    <nav class="topnav">
+        <a th:href="@{/admin}" th:classappend="${active == 'home'} ? 'nav-active' : ''">后台首页</a>
+        <a th:href="@{/admin/intents}" th:classappend="${active == 'intents'} ? 'nav-active' : ''">交易与意向</a>
+        <a th:href="@{/}" target="_blank">买家视角</a>
+        <span class="muted" th:if="${sellerName}" th:text="'你好，' + ${sellerName}">你好</span>
+    </nav>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,4 @@
+wrapperVersion=3.3.4
+distributionType=only-script
+# 走阿里云镜像下载 Maven，避免国内直连中央仓库超时
+distributionUrl=https://maven.aliyun.com/repository/public/org/apache/maven/apache-maven/3.9.9/apache-maven-3.9.9-bin.zip

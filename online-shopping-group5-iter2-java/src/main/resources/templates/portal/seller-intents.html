@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<!-- 某商品的意向队列与交易确认 —— 买家门户与交易：周到（T2-18） -->
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{portal/fragments :: head('意向队列')}"></head>
+<body>
+<div th:replace="~{portal/fragments :: adminTopbar('intents')}"></div>
+
+<div class="container">
+
+    <p><a th:href="@{/admin/intents}">← 返回我的商品</a></p>
+
+    <div class="banner banner-ok" th:if="${msg}" th:text="${msg}"></div>
+    <div class="banner banner-error" th:if="${error}" th:text="${error}"></div>
+
+    <!-- 商品摘要 -->
+    <div class="card">
+        <div class="product-row">
+            <img class="thumb" th:src="@{'/' + ${product.imagePath}}" th:alt="${product.name}">
+            <div class="product-info" style="flex:1;">
+                <h2 th:text="${product.name}">商品名</h2>
+                <p>
+                    <span class="price" th:text="'¥ ' + ${product.priceYuan}">¥ 0.00</span>
+                    <span class="tag" th:classappend="${product.statusCss}" th:text="${product.statusLabel}">在售</span>
+                </p>
+                <p class="muted">
+                    队列共 <b th:text="${queue.size()}">0</b> 条未结束意向（含交易中）。
+                    <span th:if="${product.status == 'frozen'}" class="tag tag-orange">该商品正在交易中</span>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="card empty-tip" th:if="${queue.isEmpty()}">
+        <p>当前没有待处理的意向</p>
+        <p class="muted">买家提交意向后会出现在这里，按提交时间先后排列。</p>
+    </div>
+
+    <!-- 队列 -->
+    <div class="card" th:if="${!queue.isEmpty()}">
+        <table class="table">
+            <thead>
+            <tr>
+                <th>位次</th>
+                <th>买家</th>
+                <th>联系电话</th>
+                <th>交易地点</th>
+                <th>下单时间</th>
+                <th>状态</th>
+                <th>操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="row : ${queue}">
+                <td><span class="badge-lg" th:text="${row.position()}">1</span></td>
+                <td th:text="${row.intent().buyerName}">买家</td>
+                <td th:text="${row.intent().phone}">电话</td>
+                <td class="muted" th:text="${row.intent().tradeAddress} ?: '（未填）'">地点</td>
+                <td th:text="${row.intent().createdAtText}">2026-10-21 16:00</td>
+                <td>
+                    <span class="tag" th:classappend="${row.trading()} ? 'tag-orange' : 'tag-blue'"
+                          th:text="${row.intent().statusLabel}">排队中</span>
+                </td>
+                <td>
+                    <!-- 排队中且是队首：确认交易 -->
+                    <form th:if="${row.head() and !row.trading()}"
+                          method="post"
+                          th:action="@{'/admin/intents/' + ${row.intent().id} + '/confirm'}"
+                          class="inline-form">
+                        <button type="submit" class="btn btn-sm btn-primary">确认交易</button>
+                    </form>
+
+                    <!-- 非队首：只能等 -->
+                    <span class="muted" th:if="${!row.head() and !row.trading()}">等待前面的人处理</span>
+
+                    <!-- 交易中：成功 / 失败（作废）/ 失败（塞回队尾） -->
+                    <div th:if="${row.trading()}" style="display:flex;gap:6px;flex-wrap:wrap;">
+                        <form method="post"
+                              th:action="@{'/admin/intents/' + ${row.intent().id} + '/success'}"
+                              class="inline-form">
+                            <button type="submit" class="btn btn-sm btn-success">交易成功（扣 1 件）</button>
+                        </form>
+                        <form method="post"
+                              th:action="@{'/admin/intents/' + ${row.intent().id} + '/fail'}"
+                              class="inline-form">
+                            <input type="text" name="reason" placeholder="失败原因（可空）" style="min-width:150px;">
+                            <button type="submit" class="btn btn-sm btn-warning">失败 · 作废</button>
+                            <button type="submit" name="requeue" value="true" class="btn btn-sm btn-danger">
+                                失败 · 塞回队尾
+                            </button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <p class="muted">
+        说明：本系统没有单独的「取消」状态。你的「取消」就等于「交易失败」——
+        库存不动、商品立刻回到在售，后面排队的人接着按顺序走。
+    </p>
+
+</div>
+</body>
+</html>
