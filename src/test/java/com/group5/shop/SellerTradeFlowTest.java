@@ -43,8 +43,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * ③ 成交才扣库存、订单置 success、商品解冻；
  * ④ 失败不扣库存，买家可「作废」或「塞回队尾」，<b>全程没有独立的取消状态</b>。</p>
  *
- * <p>库存扣减在商品中心 T2-10 合入前按「不限库存」降级（{@code product.stock} 不存在），
- * 因此这里不断言库存数值，只断言订单与商品状态。</p>
+ * <p>库存断言：商品中心 T2-10 已合入，{@code product.stock} 与 {@code StockService} 就位，
+ * 因此这里直接断言库存数值——确认交易不动库存（3）、成交扣 1 件（2）、失败不扣（2）。</p>
  *
  * @author 周到
  */
@@ -174,6 +174,8 @@ class SellerTradeFlowTest {
 
         assertThat(intentMapper.selectById(intentA).getStatus()).isEqualTo(IntentStatus.TRADING);
         assertThat(productMapper.selectById(productId).getStatus()).isEqualTo(ProductStatus.FROZEN);
+        assertThat(productMapper.selectById(productId).getStock())
+                .as("确认交易只是冻结商品，此时不扣库存").isEqualTo(3);
     }
 
     @Test
@@ -203,6 +205,8 @@ class SellerTradeFlowTest {
         assertThat(done.getFinishedAt()).as("交易时间必须落库，我的订单要按它排序").isNotNull();
 
         assertThat(productMapper.selectById(productId).getStatus()).isEqualTo(ProductStatus.ON_SALE);
+        assertThat(productMapper.selectById(productId).getStock())
+                .as("成交此刻真实扣减 1 件：3 → 2").isEqualTo(2);
     }
 
     // ==================================================================
@@ -228,6 +232,8 @@ class SellerTradeFlowTest {
         assertThat(failed.getFinishedAt()).isNotNull();
 
         assertThat(productMapper.selectById(productId).getStatus()).isEqualTo(ProductStatus.ON_SALE);
+        assertThat(productMapper.selectById(productId).getStock())
+                .as("失败不扣库存：仍是成交后的 2").isEqualTo(2);
     }
 
     @Test
