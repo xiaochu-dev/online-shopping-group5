@@ -30,7 +30,9 @@ jobs:
           cache: maven
 
       - name: Run Maven tests
-        run: ./mvnw -B test
+        run: |
+          chmod +x mvnw
+          ./mvnw -B test
 
   # 第二关：构建镜像并推送到 GitHub Container Registry
   build-and-push:
