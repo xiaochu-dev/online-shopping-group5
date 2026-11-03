@@ -1,0 +1,82 @@
+name: CI and Docker Image (iter2-java)
+
+# 迭代2（Java 17 + Spring Boot）的 CI + 镜像构建
+# 触发条件：
+#   1) 推送到 iter2-java 分支（构建迭代2镜像）
+#   2) 手动点击 Run workflow
+#   3) 推送 tag（如 iter2-v1.0）
+on:
+  push:
+    branches: [iter2-java]
+    tags: ["iter2-*", "v*"]
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: ghcr.io/xiaochu-dev/online-shopping-group5
+
+jobs:
+  # 第一关：跑自动化测试（83 项），不通过就不出镜像
+  test:
+    name: Run automated tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Run Maven tests
+        run: ./mvnw -B test
+
+  # 第二关：构建镜像并推送到 GitHub Container Registry
+  build-and-push:
+    name: Build and push image
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=iter2-v1.0
+            type=sha,prefix=sha-
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          echo "### Image pushed" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "Pull: docker pull ${{ env.IMAGE_NAME }}:iter2-v1.0" >> $GITHUB_STEP_SUMMARY
