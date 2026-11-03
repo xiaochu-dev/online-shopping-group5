@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<!-- 订单支付页 —— 模拟支付模块（第 5 组） -->
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{portal/fragments :: head('订单支付')}"></head>
+<body>
+<div th:replace="~{portal/fragments :: buyerTopbar('orders')}"></div>
+
+<div class="container">
+
+    <p><a th:href="@{/my/orders}">← 返回我的订单</a></p>
+
+    <!-- 操作结果提示 -->
+    <div class="banner banner-ok" th:if="${msg}" th:text="${msg}"></div>
+    <div class="banner banner-error" th:if="${error}" th:text="${error}"></div>
+
+    <!-- ==================== 支付单信息 ==================== -->
+    <div class="card">
+        <h2>订单支付</h2>
+
+        <p class="muted">
+            本系统为<strong>模拟支付</strong>，点击「模拟支付」即等价于支付宝支付成功回调，
+            不会产生真实扣款。
+        </p>
+
+        <table class="table" style="margin-top:12px;">
+            <tbody>
+            <tr>
+                <td style="width:120px;">商品</td>
+                <td><b th:text="${productName}">商品名</b></td>
+            </tr>
+            <tr>
+                <td>应付金额</td>
+                <td><span class="price" th:text="'¥ ' + ${payment.amountYuan}">¥ 0.00</span></td>
+            </tr>
+            <tr>
+                <td>支付单号</td>
+                <td><code th:text="${payment.tradeNo}">PAY...</code></td>
+            </tr>
+            <tr>
+                <td>支付状态</td>
+                <td>
+                    <span class="tag tag-orange" th:if="${payment.pending}" th:text="${payment.statusLabel}">待支付</span>
+                    <span class="tag tag-green" th:if="${payment.paid}" th:text="${payment.statusLabel}">已支付</span>
+                    <span class="tag tag-gray" th:if="${payment.refunded}" th:text="${payment.statusLabel}">已退款</span>
+                    <span class="tag tag-gray" th:if="${!payment.pending and !payment.paid and !payment.refunded}"
+                          th:text="${payment.statusLabel}">其他</span>
+                </td>
+            </tr>
+            <tr th:if="${payment.paidAt != null}">
+                <td>支付时间</td>
+                <td th:text="${payment.paidAtText}">2026-11-03 21:30</td>
+            </tr>
+            <tr th:if="${payment.refundedAt != null}">
+                <td>退款时间</td>
+                <td th:text="${payment.refundedAtText}">2026-11-03 21:35</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <!-- 待支付：显示「模拟支付」按钮 -->
+        <form th:if="${payment.pending}" method="post"
+              th:action="@{'/pay/' + ${payment.intentId} + '/pay'}"
+              style="margin-top:16px;">
+            <button type="submit" class="btn btn-primary btn-block">模拟支付（¥ <span th:text="${payment.amountYuan}">0.00</span>）</button>
+        </form>
+
+        <!-- 已支付：显示「申请退款」按钮 -->
+        <form th:if="${payment.paid}" method="post"
+              th:action="@{'/pay/' + ${payment.intentId} + '/refund'}"
+              style="margin-top:16px;">
+            <button type="submit" class="btn btn-danger btn-block">申请退款</button>
+        </form>
+
+        <!-- 已退款：提示终态 -->
+        <p class="muted" th:if="${payment.refunded}" style="margin-top:16px;">
+            该订单已退款，交易视为失败。
+        </p>
+    </div>
+
+</div>
+</body>
+</html>

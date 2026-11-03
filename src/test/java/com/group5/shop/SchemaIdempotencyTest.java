@@ -66,13 +66,14 @@ class SchemaIdempotencyTest {
 
     @Test
     void 建表脚本重复执行应无异常且种子数据不翻倍() throws Exception {
-        // 迭代 2 起建表脚本按模块拆成四个文件（见 application.yml），
+        // 迭代 2 起建表脚本按模块拆成五个文件（见 application.yml），
         // 这里按同样顺序再跑两遍（加上启动时的一遍，共三遍）
         String[] scripts = {
                 "schema/00-base.sql",
                 "schema/01-buyer.sql",
                 "schema/02-product.sql",
-                "schema/03-intent.sql"
+                "schema/03-intent.sql",
+                "schema/04-payment.sql"
         };
         try (Connection connection = dataSource.getConnection()) {
             for (int round = 0; round < 2; round++) {
@@ -82,11 +83,11 @@ class SchemaIdempotencyTest {
             }
         }
 
-        // 1. 五张表齐全（迭代 1 的三张 + 迭代 2 的 category + 本版的 buyer）
+        // 1. 六张业务表齐全（迭代 1 的三张 + 迭代 2 的 category/buyer + 本版的 payment）
         List<String> tables = jdbcTemplate.queryForList(
                 "SELECT name FROM sqlite_master WHERE type = 'table' "
                         + "AND name NOT LIKE 'sqlite_%' ORDER BY name", String.class);
-        assertEquals(List.of("buyer", "category", "intent", "product", "product_image", "seller"), tables);
+        assertEquals(List.of("buyer", "category", "intent", "payment", "product", "product_image", "seller"), tables);
 
         // 2. 种子数据不重复插入
         assertEquals(1L, sellerMapper.selectCount(null), "卖家账号只能有一条");
@@ -111,6 +112,14 @@ class SchemaIdempotencyTest {
         List<String> intentColumns = jdbcTemplate.queryForList(
                 "SELECT name FROM pragma_table_info('intent')", String.class);
         assertEquals(true, intentColumns.contains("token_code"));
+
+        // 04-payment：支付单必须有关联意向、分计价金额与唯一流水号
+        List<String> paymentColumns = jdbcTemplate.queryForList(
+                "SELECT name FROM pragma_table_info('payment')", String.class);
+        assertEquals(true, paymentColumns.contains("intent_id"));
+        assertEquals(true, paymentColumns.contains("amount_cents"));
+        assertEquals(true, paymentColumns.contains("status"));
+        assertEquals(true, paymentColumns.contains("trade_no"));
 
         // T2-02：buyer 表字段与澄清结论一致（电话必填、不唯一）
         List<String> buyerColumns = jdbcTemplate.queryForList(
