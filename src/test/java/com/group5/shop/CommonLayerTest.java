@@ -83,11 +83,11 @@ class CommonLayerTest {
         assertEquals(16, admin.getSalt().length());
 
         List<Category> categories = categoryMapper.selectEnabled();
-        // 挑战需求 A.1-2 起分类分两级：5 个一级（仅作分组标题）+ 14 个二级（商品可挂的叶子）。
-        // 分别校验，避免只用总数掩盖「某一级漏建」。
+        // 挑战需求 A.1-2 起分类分两级：5 个一级（仅作分组标题）+ 19 个二级（商品可挂的叶子，
+        // 含每个一级类目下 1 个「其他 XX」兜底叶子）。分别校验，避免只用总数掩盖漏建。
         long topCount = categories.stream().filter(c -> c.getParentId() == null).count();
         assertEquals(5L, topCount, "应预置 5 个启用的一级分类");
-        assertEquals(14L, categories.size() - topCount, "应预置 14 个启用的二级分类");
+        assertEquals(19L, categories.size() - topCount, "应预置 19 个启用的二级分类");
         assertEquals("数码电子", categories.get(0).getName(), "分类应按 sort_no 升序");
         assertEquals(CategoryStatus.ENABLED, categories.get(0).getStatus());
     }

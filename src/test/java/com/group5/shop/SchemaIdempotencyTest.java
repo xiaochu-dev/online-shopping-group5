@@ -91,15 +91,16 @@ class SchemaIdempotencyTest {
 
         // 2. 种子数据不重复插入
         assertEquals(1L, sellerMapper.selectCount(null), "卖家账号只能有一条");
-        // 分类分两级（挑战需求 A.1-2）：一级 5 个作分组，二级 14 个才是商品可挂的叶子。
+        // 分类分两级（挑战需求 A.1-2）：一级 5 个作分组，二级 19 个才是商品可挂的叶子
+        // （14 个常见细分类 + 每个一级类目下 1 个「其他 XX」兜底叶子）。
         // 分别断言，避免只用总数掩盖「某一级漏建」或「某一级翻倍」。
         assertEquals(5L, jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM category WHERE parent_id IS NULL", Long.class),
                 "一级分类不能因重复执行而翻倍");
-        assertEquals(14L, jdbcTemplate.queryForObject(
+        assertEquals(19L, jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM category WHERE parent_id IS NOT NULL", Long.class),
                 "二级分类不能因重复执行而翻倍");
-        assertEquals(19L, categoryMapper.selectCount(null), "分类总数应为一级 5 + 二级 14");
+        assertEquals(24L, categoryMapper.selectCount(null), "分类总数应为一级 5 + 二级 19");
 
         // 3. 业务表为空但结构可用（能正常 count，说明列名与实体映射一致）
         assertEquals(0L, productMapper.selectCount(null));
