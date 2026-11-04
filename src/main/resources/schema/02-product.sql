@@ -27,3 +27,31 @@ CREATE INDEX IF NOT EXISTS idx_product_category ON product(category_id,status);
 INSERT OR IGNORE INTO category(id,name,sort_no,status,created_at,updated_at) VALUES
  (1,'数码电子',1,'enabled',0,0),(2,'图书教材',2,'enabled',0,0),
  (3,'服饰鞋包',3,'enabled',0,0),(4,'生活百货',4,'enabled',0,0),(5,'运动户外',5,'enabled',0,0);
+
+-- --------------------------------------------------------------------------
+-- 二级分类种子数据（挑战需求 A.1-2）
+-- --------------------------------------------------------------------------
+-- 为什么必须有：商品发布要求挂到【二级叶子分类】，发布页的 <optgroup> 只渲染
+-- 一级分类作为分组标题、真正可选项来自 children。若库里只有一级分类，
+-- 下拉框会显示 5 个灰色分组标题却一个可选项都没有，表现为「选不了」。
+-- 用 INSERT OR IGNORE + 显式 id，可重复执行；固定 id 避开 1~5（一级分类占用）。
+INSERT OR IGNORE INTO category(id,parent_id,name,sort_no,status,created_at,updated_at) VALUES
+ -- 数码电子(1)
+ (101,1,'手机',1,'enabled',0,0),
+ (102,1,'笔记本电脑',2,'enabled',0,0),
+ (103,1,'耳机',3,'enabled',0,0),
+ (104,1,'键盘鼠标',4,'enabled',0,0),
+ -- 图书教材(2)
+ (201,2,'计算机类',1,'enabled',0,0),
+ (202,2,'文学小说',2,'enabled',0,0),
+ (203,2,'考试辅导',3,'enabled',0,0),
+ -- 服饰鞋包(3)
+ (301,3,'上衣',1,'enabled',0,0),
+ (302,3,'裤子',2,'enabled',0,0),
+ (303,3,'鞋',3,'enabled',0,0),
+ -- 生活百货(4)
+ (401,4,'家居用品',1,'enabled',0,0),
+ (402,4,'厨房用品',2,'enabled',0,0),
+ -- 运动户外(5)
+ (501,5,'健身器材',1,'enabled',0,0),
+ (502,5,'户外装备',2,'enabled',0,0);

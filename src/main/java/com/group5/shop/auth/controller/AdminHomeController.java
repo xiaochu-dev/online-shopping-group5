@@ -80,7 +80,11 @@ public class AdminHomeController {
         model.addAttribute("error", error);
 
         // 数据概览：直接调 Mapper，顺便验证 T2-06 的 Mapper 可正常注入与查询
-        model.addAttribute("categoryCount", categoryMapper.selectCount(null));
+        // 「商品分类」卡片只统计一级分类（parent_id 为空）：二级分类是挂在某个大类下的叶子，
+        // 全算进来会让卖家看到与「分类管理」页大类和数不一致的数字（如 19 而非 5）。
+        Long topCategoryCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM category WHERE parent_id IS NULL", Long.class);
+        model.addAttribute("categoryCount", topCategoryCount == null ? 0L : topCategoryCount);
         model.addAttribute("productTotal", productMapper.selectCount(null));
         model.addAttribute("productOnSale", productMapper.countByStatus(ProductStatus.ON_SALE));
         model.addAttribute("productDelisted", productMapper.countByStatus(ProductStatus.DELISTED));
