@@ -64,6 +64,37 @@ public class OrderHistoryService {
     }
 
     /**
+     * 某买家<b>进行中</b>的意向（迭代 3 新增），供「我的订单」的「进行中」区块使用。
+     *
+     * <p>不分页：一个人同时挂着的未结束意向通常只有个位数，单独成块比分页更直观，
+     * 也避免「进行中的单被翻页埋掉」。</p>
+     *
+     * @param buyerId 登录买家 id（调用方保证非空）
+     * @return 进行中的意向，按提交时间正序；无则空列表
+     */
+    public List<OrderItem> activeList(Long buyerId) {
+        return toItems(intentMapper.selectActiveByBuyer(buyerId));
+    }
+
+    /**
+     * 买家撤销自己的意向（迭代 3 新增）。
+     *
+     * <p>撤销的合法性完全交给 SQL 的 WHERE 条件判定（本人 + 仅排队中），
+     * 服务层不先查再改——先查后改在并发下存在「查的时候还是 pending、改的时候已被卖家确认」
+     * 的窗口，直接带条件 UPDATE 让数据库原子地判定。</p>
+     *
+     * @param buyerId  当前登录买家 id
+     * @param intentId 意向 id
+     * @return true = 撤销成功；false = 不存在 / 非本人 / 状态已不可撤销
+     */
+    public boolean cancel(Long buyerId, Long intentId) {
+        if (buyerId == null || intentId == null) {
+            return false;
+        }
+        return intentMapper.cancelByIdAndBuyer(intentId, buyerId) > 0;
+    }
+
+    /**
      * 批量补商品信息。
      *
      * <p>用一次 {@code selectBatchIds} 而不是逐行查库：一页 10 条就是 10 次往返，

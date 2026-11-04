@@ -108,6 +108,43 @@ public interface IntentMapper extends BaseMapper<Intent> {
     long countFinishedByBuyer(@Param("buyerId") Long buyerId);
 
     /**
+     * 某买家<b>进行中</b>的意向（迭代 3 新增：排队中 + 交易中）。
+     *
+     * <p>补上「提交后查不到自己意向」的缺口：原设计只让客户看到已出结果的单，
+     * 客户提交后进入黑箱，既看不到进度也无法反悔。本方法供「我的订单」的
+     * 「进行中」区块使用，按提交时间正序（先提交的在上，与队列顺序一致）。</p>
+     *
+     * @param buyerId 买家 id
+     * @return 进行中的意向；无则返回空列表
+     */
+    @Select("SELECT " + COLUMNS + " FROM intent "
+            + "WHERE buyer_id = #{buyerId} AND status IN ('pending', 'trading') "
+            + "ORDER BY created_at ASC, id ASC")
+    List<Intent> selectActiveByBuyer(@Param("buyerId") Long buyerId);
+
+    /**
+     * 买家撤销自己的意向（迭代 3 新增）。
+     *
+     * <p><b>三个条件缺一不可，这是安全底线</b>：</p>
+     * <ul>
+     *   <li>{@code buyer_id = #{buyerId}}：只能撤销<b>自己的</b>单，防越权；</li>
+     *   <li>{@code status = 'pending'}：只有排队中的能撤销，交易中/已成交/已失败都不行；</li>
+     *   <li>{@code id = #{id}}：定位到具体单据。</li>
+     * </ul>
+     *
+     * <p>撤销<b>不写 finished_at</b>：这个字段语义是「交易发生的时间」，撤销没有交易发生。
+     * 撤销后该单 status 变为 cancelled，因队列查询只取 pending，后面的人自然前移，
+     * 不需要批量 UPDATE 位次（与队列位次不落库的设计一致）。</p>
+     *
+     * @param id      意向 id
+     * @param buyerId 当前登录买家 id
+     * @return 受影响行数：1 = 撤销成功；0 = 不存在、不属于本人、或状态不可撤销
+     */
+    @Update("UPDATE intent SET status = 'cancelled' "
+            + "WHERE id = #{id} AND buyer_id = #{buyerId} AND status = 'pending'")
+    int cancelByIdAndBuyer(@Param("id") Long id, @Param("buyerId") Long buyerId);
+
+    /**
      * 按商品统计未结束意向数（卖家「我的商品」列表上显示队列长度）。
      *
      * <p>一次分组查询代替「每个商品查一次」，避免列表页 N+1。</p>

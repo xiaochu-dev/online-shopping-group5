@@ -177,11 +177,11 @@ class MyOrdersFlowTest {
     }
 
     @Test
-    void 只显示已有结果的订单且按交易时间倒序() throws Exception {
+    void 已结束订单按交易时间倒序_排队中的单归入进行中() throws Exception {
         String html = bodyOf(mockMvc.perform(get("/my/orders").cookie(loginCookie(USER_A)))
                 .andExpect(status().isOk())
                 .andExpect(view().name("portal/my-orders"))
-                .andExpect(model().attributeExists("pageResult"))
+                .andExpect(model().attributeExists("pageResult", "activeIntents"))
                 .andReturn());
 
         assertThat(html).contains("成交较早的台灯");
@@ -189,8 +189,10 @@ class MyOrdersFlowTest {
         assertThat(html).contains("交易失败");
         assertThat(html).contains("交易成功");
 
-        // 排队中的单不进历史
-        assertThat(html).doesNotContain("还在排队的加湿器");
+        // 迭代 3 口径变更：排队中的单不再被隐藏，而是归入「进行中的意向」区块，
+        // 已结束区块仍然只放有结果的单。
+        assertThat(html).contains("进行中的意向");
+        assertThat(html).contains("还在排队的加湿器");
 
         // 交易时间倒序：成交晚的椅子必须排在成交早的台灯前面
         assertThat(html.indexOf("成交较晚的椅子"))
@@ -203,7 +205,9 @@ class MyOrdersFlowTest {
         String html = bodyOf(mockMvc.perform(get("/my/orders").cookie(loginCookie(USER_B)))
                 .andExpect(status().isOk()).andReturn());
 
-        assertThat(html).contains("还没有成交记录");
+        assertThat(html).contains("还没有已结束的订单");
+        assertThat(html).contains("当前没有进行中的意向");
         assertThat(html).doesNotContain("成交较早的台灯");
+        assertThat(html).doesNotContain("还在排队的加湿器");
     }
 }

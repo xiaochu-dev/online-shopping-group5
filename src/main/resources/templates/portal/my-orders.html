@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 我的订单 —— 买家门户：周到（T2-17） -->
+<!-- 我的订单 —— 买家门户：周到（T2-17）；迭代 3 增补「进行中」区块与自助撤销 -->
 <html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
 <head th:replace="~{portal/fragments :: head('我的订单')}"></head>
 <body>
@@ -8,35 +8,34 @@
 <div class="container">
 
     <h2>我的订单</h2>
-    <p class="muted">
-        这里只显示<strong>已有结果</strong>的订单（交易成功 / 交易失败），按交易时间倒序。
-        排队中与交易中的订单还没有结果，不在此列表；下单成功后请等待卖家确认。
-    </p>
 
-    <!-- 空态 -->
-    <div class="card empty-tip" th:if="${pageResult.total == 0}">
-        <p>还没有成交记录</p>
+    <!-- 操作结果提示 -->
+    <div class="banner banner-ok" th:if="${param.msg}" th:text="${param.msg}">操作成功</div>
+    <div class="banner banner-error" th:if="${param.error}" th:text="${param.error}">操作失败</div>
+
+    <!-- ==================== 一、进行中的意向 ==================== -->
+    <div class="card">
+        <h3 style="margin-top:0;">进行中的意向</h3>
         <p class="muted">
-            去<a th:href="@{/}">商品列表</a>看看有什么可买的。
-            如果你刚提交了意向，它在卖家处理之前不会出现在这里。
+            排队中与交易中的意向都在这里，按提交时间正序（先提交的在上）。
+            <strong>排队中的可以撤销</strong>；一旦卖家确认进入交易，就不能再撤销了。
         </p>
-    </div>
 
-    <!-- 订单表 -->
-    <div class="card" th:if="${pageResult.total > 0}">
-        <p class="muted">共 <b th:text="${pageResult.total}">0</b> 条记录</p>
-        <table class="table">
+        <div class="empty-tip" th:if="${activeIntents.isEmpty()}">
+            <p class="muted">当前没有进行中的意向。去<a th:href="@{/}">商品列表</a>看看有什么可买的。</p>
+        </div>
+
+        <table class="table" th:if="${!activeIntents.isEmpty()}">
             <thead>
             <tr>
                 <th>商品</th>
-                <th>下单时间</th>
-                <th>交易结果</th>
-                <th>交易时间</th>
-                <th>备注</th>
+                <th>提交时间</th>
+                <th>当前状态</th>
+                <th>操作</th>
             </tr>
             </thead>
             <tbody>
-            <tr th:each="row : ${pageResult.records}">
+            <tr th:each="row : ${activeIntents}">
                 <td>
                     <div class="product-row" style="gap:10px;">
                         <img class="thumb" th:src="@{'/' + ${row.image()}}" th:alt="${row.name()}"
@@ -48,31 +47,86 @@
                         </div>
                     </div>
                 </td>
-                <td th:text="${row.intent().createdAtText}">2026-10-21 16:00</td>
+                <td th:text="${row.intent().createdAtText}">2026-11-04 16:00</td>
                 <td>
-                    <span class="tag" th:classappend="${row.resultCss()}"
-                          th:text="${row.intent().tradeResultLabel}">交易成功</span>
+                    <span class="tag"
+                          th:classappend="${row.intent().status == 'pending'} ? 'tag-orange' : 'tag-blue'"
+                          th:text="${row.intent().statusLabel}">排队中</span>
                 </td>
-                <td th:text="${row.intent().finishedAtText}">2026-10-21 16:30</td>
-                <td class="muted">
-                    <span th:if="${row.intent().failReason != null and !row.intent().failReason.isEmpty()}"
-                          th:text="'失败原因：' + ${row.intent().failReason}">失败原因</span>
-                    <span th:if="${row.intent().tradeAddress != null and !row.intent().tradeAddress.isEmpty()}"
-                          th:text="'交易地点：' + ${row.intent().tradeAddress}">交易地点</span>
+                <td>
+                    <!-- 仅「排队中」可撤销；交易中显示为不可操作 -->
+                    <form th:if="${row.intent().isCancellable()}"
+                          th:action="@{'/my/orders/' + ${row.intent().id} + '/cancel'}" method="post"
+                          onsubmit="return confirm('确定撤销这条意向吗？撤销后将退出排队队列，需要重新提交才能再排队。');">
+                        <button class="btn btn-sm" type="submit">撤销意向</button>
+                    </form>
+                    <span class="muted" th:unless="${row.intent().isCancellable()}">交易中，不可撤销</span>
                 </td>
             </tr>
             </tbody>
         </table>
     </div>
 
-    <!-- 分页 -->
-    <div class="pager" th:if="${pageResult.totalPages > 1}">
-        <a class="btn btn-sm" th:if="${pageResult.hasPrev}"
-           th:href="@{/my/orders(page=${pageResult.page - 1}, size=${pageResult.size})}">上一页</a>
-        <span class="pager-info"
-              th:text="'第 ' + ${pageResult.page} + ' / ' + ${pageResult.totalPages} + ' 页'">第 1 / 1 页</span>
-        <a class="btn btn-sm" th:if="${pageResult.hasNext}"
-           th:href="@{/my/orders(page=${pageResult.page + 1}, size=${pageResult.size})}">下一页</a>
+    <!-- ==================== 二、已结束的订单 ==================== -->
+    <div class="card">
+        <h3 style="margin-top:0;">已结束的订单</h3>
+        <p class="muted">交易成功 / 交易失败的记录，按交易时间倒序。</p>
+
+        <div class="empty-tip" th:if="${pageResult.total == 0}">
+            <p class="muted">还没有已结束的订单。买家提交意向、卖家确认交易后，结果会出现在这里。</p>
+        </div>
+
+        <div th:if="${pageResult.total > 0}">
+            <p class="muted">共 <b th:text="${pageResult.total}">0</b> 条记录</p>
+            <table class="table">
+                <thead>
+                <tr>
+                    <th>商品</th>
+                    <th>下单时间</th>
+                    <th>交易结果</th>
+                    <th>交易时间</th>
+                    <th>备注</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="row : ${pageResult.records}">
+                    <td>
+                        <div class="product-row" style="gap:10px;">
+                            <img class="thumb" th:src="@{'/' + ${row.image()}}" th:alt="${row.name()}"
+                                 th:if="${row.image() != null}">
+                            <div>
+                                <a th:href="@{'/products/' + ${row.intent().productId}}"
+                                   th:text="${row.name()}">商品名</a>
+                                <div class="muted" th:text="'¥ ' + ${row.priceYuan()}">¥ 0.00</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td th:text="${row.intent().createdAtText}">2026-10-21 16:00</td>
+                    <td>
+                        <span class="tag" th:classappend="${row.resultCss()}"
+                              th:text="${row.intent().tradeResultLabel}">交易成功</span>
+                    </td>
+                    <td th:text="${row.intent().finishedAtText}">2026-10-21 16:30</td>
+                    <td class="muted">
+                        <span th:if="${row.intent().failReason != null and !row.intent().failReason.isEmpty()}"
+                              th:text="'失败原因：' + ${row.intent().failReason}">失败原因</span>
+                        <span th:if="${row.intent().tradeAddress != null and !row.intent().tradeAddress.isEmpty()}"
+                              th:text="'交易地点：' + ${row.intent().tradeAddress}">交易地点</span>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 分页 -->
+        <div class="pager" th:if="${pageResult.totalPages > 1}">
+            <a class="btn btn-sm" th:if="${pageResult.hasPrev}"
+               th:href="@{/my/orders(page=${pageResult.page - 1}, size=${pageResult.size})}">上一页</a>
+            <span class="pager-info"
+                  th:text="'第 ' + ${pageResult.page} + ' / ' + ${pageResult.totalPages} + ' 页'">第 1 / 1 页</span>
+            <a class="btn btn-sm" th:if="${pageResult.hasNext}"
+               th:href="@{/my/orders(page=${pageResult.page + 1}, size=${pageResult.size})}">下一页</a>
+        </div>
     </div>
 
 </div>
