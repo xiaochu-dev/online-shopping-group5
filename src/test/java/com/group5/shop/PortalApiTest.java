@@ -251,7 +251,7 @@ class PortalApiTest {
 
     @Test
     @Order(6)
-    @DisplayName("我的订单按买家隔离，排队中的单不出现")
+    @DisplayName("我的订单按买家隔离，排队中的单归入「进行中」区块")
     void 我的订单按买家隔离且只显示已有结果的订单() throws Exception {
         insertFinished(buyerAId, BUYER_A, productOwnA);
         insertFinished(buyerBId, BUYER_B, productOwnB);
@@ -262,9 +262,18 @@ class PortalApiTest {
 
         assertThat(html).contains("API 测试商品·A 的成交单");
         assertThat(html).as("A 不能看到 B 的订单").doesNotContain("API 测试商品·B 的成交单");
-        assertThat(html)
-                .as("第 5 步下的单还在排队中，没有交易结果，不进「我的订单」")
-                .doesNotContain("API 测试商品·真实下单");
+
+        // 迭代 3 口径变更：排队中的单不再被隐藏，而是归入「进行中的意向」区块；
+        // 但仍不能混进「已结束的订单」区块。用两个区块标题的位置来判定归属。
+        int activeHeading = html.indexOf("进行中的意向");
+        int finishedHeading = html.indexOf("已结束的订单");
+        int pendingProduct = html.indexOf("API 测试商品·真实下单");
+        assertThat(activeHeading).as("页面应有「进行中的意向」区块").isGreaterThan(-1);
+        assertThat(finishedHeading).as("页面应有「已结束的订单」区块").isGreaterThan(-1);
+        assertThat(pendingProduct)
+                .as("排队中的单应显示在「进行中」区块内，而非「已结束」区块")
+                .isGreaterThan(activeHeading)
+                .isLessThan(finishedHeading);
     }
 
     // ==================================================================
