@@ -27,7 +27,8 @@
         <a th:href="@{/admin}" th:classappend="${active == 'home'} ? 'nav-active' : ''">后台首页</a>
         <a th:href="@{/admin/products}" th:classappend="${active == 'products'} ? 'nav-active' : ''">我的商品</a>
         <a th:href="@{/admin/products/new}" th:classappend="${active == 'publish'} ? 'nav-active' : ''">发布商品</a>
-        <a th:href="@{/admin/intents}" th:classappend="${active == 'intents'} ? 'nav-active' : ''">交易与意向</a>
+        <!-- 意向队列是「某个商品」的附属视图，不作为独立导航项：
+             商品列表页每个商品已有「查看意向」入口，且列表内直接显示待处理意向数 -->
         <a th:href="@{/admin/customers}" th:classappend="${active == 'customers'} ? 'nav-active' : ''">客户管理</a>
         <!-- 基座自检（/admin/diagnostics）是开发期自证工具，非业务功能，不放入业务导航；
              需要查看时直接访问 URL，或用 ?debug=1 之类的方式按需开放 -->

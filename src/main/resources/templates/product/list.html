@@ -5,7 +5,7 @@
 <div class="card" th:if="${products.isEmpty()}"><p>还没有符合条件的商品。</p></div>
 <article class="card product-row" th:each="p:${products}">
 <img class="product-cover" th:src="@{'/'+${p.imagePath}}" th:alt="${p.name}">
-<div class="product-main"><h2 th:text="${p.name}"></h2><p><strong th:text="'¥ '+${p.priceYuan}"></strong> <span class="tag" th:classappend="${p.statusCss}" th:text="${p.statusLabel}"></span> <span th:if="${p.offReason!=null}" th:text="${p.offReason=='auto'?'库存归零自动下架':'卖家手动下架'}"></span></p><p>当前库存：<b th:text="${p.stock}"></b></p>
+<div class="product-main"><h2 th:text="${p.name}"></h2><p><strong th:text="'¥ '+${p.priceYuan}"></strong> <span class="tag" th:classappend="${p.statusCss}" th:text="${p.statusLabel}"></span> <span th:if="${p.offReason!=null}" th:text="${p.offReason=='auto'?'库存归零自动下架':'卖家手动下架'}"></span></p><p>当前库存：<b th:text="${p.stock}"></b> · 待处理意向：<b th:text="${intentCounts.get(p.id) ?: 0}"></b></p>
 <div class="product-inline"><form th:action="@{/admin/products/{id}/stock(id=${p.id})}" method="post"><label>调整库存 <input name="stock" type="number" min="0" max="2147483647" required th:value="${p.stock}"></label><button class="btn">保存库存</button></form>
 <form th:action="@{/admin/products/{id}/off-shelf(id=${p.id})}" method="post" th:if="${p.status=='on_sale' or p.status=='frozen'}"><button class="btn">手动下架</button></form>
 <form th:action="@{/admin/products/{id}/relist(id=${p.id})}" method="post" th:if="${p.status=='off_shelf' or p.status=='delisted'}"><button class="btn btn-primary" th:disabled="${p.stock==0}">重新上架</button></form>

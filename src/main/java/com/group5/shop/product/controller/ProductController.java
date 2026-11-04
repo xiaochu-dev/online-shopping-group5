@@ -1,15 +1,18 @@
 package com.group5.shop.product.controller;
 
 import com.group5.shop.product.service.*;
+import com.group5.shop.product.port.IntentCountPort;
 import com.group5.shop.common.constant.SessionKeys;
 import com.group5.shop.common.exception.BusinessException;
 import jakarta.servlet.http.HttpSession;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import java.util.List;
+import java.util.Map;
 
 @Controller
 @RequestMapping("/admin/products")
@@ -17,10 +20,22 @@ public class ProductController {
     private final ProductService products;
     private final CategoryQueryService categories;
     private final StockService stock;
-    public ProductController(ProductService products,CategoryQueryService categories,StockService stock) { this.products=products; this.categories=categories; this.stock=stock; }
+    /** 待处理意向数端口：由 portal 实现；实现未到位时为 null，页面回退为 0（不阻塞启动） */
+    private final ObjectProvider<IntentCountPort> intentCounts;
+
+    public ProductController(ProductService products,CategoryQueryService categories,StockService stock,
+                             ObjectProvider<IntentCountPort> intentCounts) {
+        this.products=products; this.categories=categories; this.stock=stock; this.intentCounts=intentCounts;
+    }
+
     @GetMapping
     public String list(@RequestParam(required=false) String status,HttpSession session,Model model) {
-        model.addAttribute("products",products.list(seller(session),status)); model.addAttribute("selectedStatus",status==null?"":status);
+        model.addAttribute("products",products.list(seller(session),status));
+        model.addAttribute("selectedStatus",status==null?"":status);
+        // 待处理意向数：意向不再是独立导航，改为在商品列表里直接看到每个商品有多少待处理
+        IntentCountPort port = intentCounts.getIfAvailable();
+        Map<Long, Integer> counts = port == null ? Map.of() : port.countActiveGroupByProduct();
+        model.addAttribute("intentCounts", counts);
         return "product/list";
     }
     @GetMapping({"/new","/publish"})
