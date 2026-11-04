@@ -27,6 +27,8 @@
         <a th:href="@{/my/orders}" th:classappend="${active == 'orders'} ? 'nav-active' : ''">我的订单</a>
         <!-- 未登录时不显示「我的订单」的登录态提示，登录入口由账号模块提供 -->
         <span class="muted" th:if="${buyerName}" th:text="'你好，' + ${buyerName}">你好</span>
+        <a th:href="@{/buyer/me}" th:if="${buyerName}">我的账号</a>
+        <a th:href="@{/buyer/logout}" th:if="${buyerName}" class="nav-logout">退出登录</a>
         <a th:href="@{/admin}" th:classappend="${active == 'admin'} ? 'nav-active' : ''">卖家后台</a>
     </nav>
 </div>

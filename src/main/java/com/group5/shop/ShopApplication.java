@@ -43,6 +43,15 @@ public class ShopApplication {
     }
 
     public static void main(String[] args) {
-        SpringApplication.run(ShopApplication.class, args);
+        org.springframework.context.ConfigurableApplicationContext context =
+                SpringApplication.run(ShopApplication.class, args);
+
+        String port = context.getEnvironment().getProperty("server.port", "8080");
+        String banner = "===================================================\n"
+                + "  在线购物系统 · 第 5 组 已启动\n"
+                + "  买家门户（逛商品 / 注册登录）: http://localhost:" + port + "/\n"
+                + "  卖家后台（初始账号 admin / admin12345）: http://localhost:" + port + "/login\n"
+                + "===================================================";
+        System.out.println(banner);
     }
 }

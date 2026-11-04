@@ -1,4 +1,6 @@
 @echo off
+rem Switch console code page to UTF-8 so Chinese logs display correctly
+chcp 65001 >nul
 setlocal
 
 rem ============================================================
