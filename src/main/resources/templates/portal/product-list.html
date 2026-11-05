@@ -68,10 +68,10 @@
         </p>
     </div>
 
-    <div class="card product-card" th:each="p : ${pageResult.records}">
+    <div class="card product-card" th:each="p, imageStat : ${pageResult.records}">
         <div class="product-row">
             <a th:href="@{'/products/' + ${p.id}}">
-                <img class="thumb" th:src="@{'/' + ${p.imagePath}}" th:alt="${p.name}">
+                <img decoding="async" width="120" height="120" th:attr="loading=${imageStat.first ? 'eager' : 'lazy'}" class="thumb" th:src="@{'/' + ${@productImages.small(p.imagePath)}}" th:alt="${p.name}">
             </a>
             <div class="product-info" style="flex:1;">
                 <div class="product-title">
