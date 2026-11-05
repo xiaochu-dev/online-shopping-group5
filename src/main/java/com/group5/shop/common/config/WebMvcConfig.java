@@ -2,6 +2,8 @@ package com.group5.shop.common.config;
 
 import com.group5.shop.auth.interceptor.LoginInterceptor;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Value;
+import java.nio.file.Path;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -23,6 +25,8 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class WebMvcConfig implements WebMvcConfigurer {
 
     private final LoginInterceptor loginInterceptor;
+    @Value("${shop.product.upload-dir:./uploads}")
+    private String uploadDirectory;
 
     public WebMvcConfig(LoginInterceptor loginInterceptor) {
         this.loginInterceptor = loginInterceptor;
@@ -39,9 +43,10 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        // 上传目录：商品图片存 ./uploads/xxx.png，页面用 /uploads/xxx.png 访问
+        // 与商品保存目录使用同一配置，原图及 thumbs 子目录均可访问。
         // 注意 file: 前缀与结尾的斜杠都不可省略，否则 Spring 会把相对路径解析错
+        String location = Path.of(uploadDirectory).toAbsolutePath().normalize().toUri().toString();
         registry.addResourceHandler("/uploads/**")
-                .addResourceLocations("file:./uploads/");
+                .addResourceLocations(location.endsWith("/") ? location : location + "/");
     }
 }

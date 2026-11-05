@@ -1,0 +1,6 @@
+metric,before,after,change_percent
+list_all_cover_http_payload_bytes,757980,178860,-76.4
+detail_all_image_http_payload_bytes,739690,213199,-71.18
+stored_image_bytes_for_15_products,11095350,13345860,20.28
+upload_median_ms,1717.49575,1849.3348,7.68
+upload_p95_ms,1795.607,1966.4182,9.51
