@@ -46,7 +46,8 @@ spring:
   #   02-product 商品中心（黄程宇）
   #   03-intent 意向与交易（周到）
   #   04-payment 模拟支付与订单状态机（第 5 组 · 支付模块）
-  # 顺序有意义：buyer → product → intent → payment 之间存在外键依赖。
+  #   05-cart 购物车（胡成溯，挑战需求 B.2.2 / B.2.3）
+  # 顺序有意义：buyer → product → intent → payment → cart 之间存在外键依赖。
   # ------------------------------------------------------------------
   sql:
     init:
@@ -57,6 +58,7 @@ spring:
         - classpath:schema/02-product.sql
         - classpath:schema/03-intent.sql
         - classpath:schema/04-payment.sql
+        - classpath:schema/05-cart.sql
       encoding: UTF-8
       continue-on-error: false
 

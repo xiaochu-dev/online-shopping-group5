@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<!-- 购物车 —— 挑战需求 B.2.2 / B.2.3 / B.2.4（负责人：胡成溯） -->
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{portal/fragments :: head('购物车')}"></head>
+<body>
+<div th:replace="~{portal/fragments :: buyerTopbar('cart')}"></div>
+
+<div class="container">
+
+    <h2>我的购物车</h2>
+
+    <!-- 操作结果提示 -->
+    <div class="banner banner-ok" th:if="${param.msg}" th:text="${param.msg}">操作成功</div>
+    <div class="banner banner-error" th:if="${param.error}" th:text="${param.error}">操作失败</div>
+
+    <!-- 空车 -->
+    <div class="card empty-tip" th:if="${rows.isEmpty()}">
+        <p class="muted">购物车还是空的。去<a th:href="@{/}">商品列表</a>挑几件吧。</p>
+    </div>
+
+    <!-- 有货 -->
+    <div class="card" th:if="${!rows.isEmpty()}">
+        <table class="table">
+            <thead>
+            <tr>
+                <th style="width:44px;">选</th>
+                <th>商品</th>
+                <th>单价</th>
+                <th style="width:160px;">数量</th>
+                <th>小计</th>
+                <th style="width:90px;">操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="row : ${rows}">
+                <td>
+                    <!-- 勾选框挂在页面底部的结算表单上（HTML5 form 属性），
+                         避免在表格里嵌套 form 造成结构非法 -->
+                    <input type="checkbox" form="checkoutForm" name="cartIds"
+                           th:value="${row.id}" th:id="'pick-' + ${row.id}">
+                </td>
+                <td>
+                    <a th:href="@{'/products/' + ${row.productId}}" th:text="${row.productName}">商品名</a>
+                    <div class="muted" th:text="'加购于 ' + ${row.updatedAtText}"></div>
+                </td>
+                <td th:text="'¥ ' + ${row.priceYuan}">¥ 0.00</td>
+                <td>
+                    <form th:action="@{'/cart/' + ${row.id} + '/quantity'}" method="post"
+                          class="product-row" style="gap:8px;">
+                        <input type="number" name="quantity" th:value="${row.quantity}"
+                               min="1" max="99" style="width:70px;" required>
+                        <button class="btn btn-sm" type="submit">更新</button>
+                    </form>
+                </td>
+                <td th:text="'¥ ' + ${row.subtotalYuan}">¥ 0.00</td>
+                <td>
+                    <form th:action="@{'/cart/' + ${row.id} + '/remove'}" method="post"
+                          onsubmit="return confirm('从购物车移除这件商品？');">
+                        <button class="btn btn-sm" type="submit">移除</button>
+                    </form>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+
+        <p class="muted" style="margin-top:16px;">
+            合计：<span class="price" th:text="'¥ ' + ${totalYuan}">¥ 0.00</span>
+            <span class="muted">（不勾选时默认结算整辆车）</span>
+        </p>
+
+        <!-- 结算与转收藏共用一个表单：转收藏按钮用 formaction 改投递地址 -->
+        <form id="checkoutForm" method="post" th:action="@{/cart/checkout}">
+            <button class="btn btn-primary" type="submit"
+                    th:disabled="${!checkoutAvailable}"
+                    th:text="${checkoutAvailable} ? '结算选中商品' : '结算待接入（等待订单模块）'">
+                结算选中商品
+            </button>
+            <button class="btn" type="submit" th:formaction="@{/cart/to-favorites}"
+                    th:disabled="${!favoriteAvailable}"
+                    th:text="${favoriteAvailable} ? '转为收藏' : '转收藏待接入（等待收藏模块）'">
+                转为收藏
+            </button>
+        </form>
+        <p class="muted" th:unless="${checkoutAvailable}" style="margin-top:8px;">
+            结算按钮当前不可用：订单模块尚未实现 <code>OrderCreatePort</code>，
+            接入后本页无需改动即可下单。
+        </p>
+        <p class="muted" th:unless="${favoriteAvailable}" style="margin-top:4px;">
+            转收藏当前不可用：收藏模块尚未实现 <code>FavoritePort</code>。
+        </p>
+    </div>
+
+    <p class="muted"><a th:href="@{/}">← 继续挑商品</a></p>
+</div>
+
+</body>
+</html>

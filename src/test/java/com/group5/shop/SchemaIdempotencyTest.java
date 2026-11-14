@@ -73,7 +73,8 @@ class SchemaIdempotencyTest {
                 "schema/01-buyer.sql",
                 "schema/02-product.sql",
                 "schema/03-intent.sql",
-                "schema/04-payment.sql"
+                "schema/04-payment.sql",
+                "schema/05-cart.sql"
         };
         try (Connection connection = dataSource.getConnection()) {
             for (int round = 0; round < 2; round++) {
@@ -83,11 +84,13 @@ class SchemaIdempotencyTest {
             }
         }
 
-        // 1. 六张业务表齐全（迭代 1 的三张 + 迭代 2 的 category/buyer + 本版的 payment）
+        // 1. 七张业务表齐全（迭代 1 的三张 + 迭代 2 的 category/buyer + 迭代 3 的 payment
+        //    + 挑战需求 B 的 cart）
         List<String> tables = jdbcTemplate.queryForList(
                 "SELECT name FROM sqlite_master WHERE type = 'table' "
                         + "AND name NOT LIKE 'sqlite_%' ORDER BY name", String.class);
-        assertEquals(List.of("buyer", "category", "intent", "payment", "product", "product_image", "seller"), tables);
+        assertEquals(List.of("buyer", "cart", "category", "intent", "payment", "product",
+                "product_image", "seller"), tables);
 
         // 2. 种子数据不重复插入
         assertEquals(1L, sellerMapper.selectCount(null), "卖家账号只能有一条");
