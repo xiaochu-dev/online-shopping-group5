@@ -28,6 +28,7 @@
         <!-- 挑战需求 B.2.2：购物车入口。购物车本身是 cart 模块（胡成溯），
              这里只挂一个链接，不改门户既有逻辑 -->
         <a th:href="@{/cart}" th:classappend="${active == 'cart'} ? 'nav-active' : ''">购物车</a>
+        <a th:href="@{/my/favorites}" th:classappend="${active == 'favorites'} ? 'nav-active' : ''">我的收藏</a>
         <!-- 未登录时不显示「我的订单」的登录态提示，登录入口由账号模块提供 -->
         <span class="muted" th:if="${buyerName}" th:text="'你好，' + ${buyerName}">你好</span>
         <a th:href="@{/buyer/me}" th:if="${buyerName}">我的账号</a>

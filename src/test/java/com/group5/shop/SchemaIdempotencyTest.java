@@ -66,7 +66,7 @@ class SchemaIdempotencyTest {
 
     @Test
     void 建表脚本重复执行应无异常且种子数据不翻倍() throws Exception {
-        // 迭代 2 起建表脚本按模块拆成五个文件（见 application.yml），
+        // 建表脚本按模块拆分（见 application.yml），
         // 这里按同样顺序再跑两遍（加上启动时的一遍，共三遍）
         String[] scripts = {
                 "schema/00-base.sql",
@@ -74,7 +74,8 @@ class SchemaIdempotencyTest {
                 "schema/02-product.sql",
                 "schema/03-intent.sql",
                 "schema/04-payment.sql",
-                "schema/05-cart.sql"
+                "schema/05-cart.sql",
+                "schema/06-favorite.sql"
         };
         try (Connection connection = dataSource.getConnection()) {
             for (int round = 0; round < 2; round++) {
@@ -84,12 +85,11 @@ class SchemaIdempotencyTest {
             }
         }
 
-        // 1. 九张业务表齐全（迭代 1 的三张 + 迭代 2 的 category/buyer + 迭代 3 的 payment
-        //    + 挑战需求 B 的 cart、order_item 订单明细、stock_restore 取消回补台账）
+        // 1. 十一张业务表齐全，含迭代 4 的购物车、收藏、订单明细和回补台账。
         List<String> tables = jdbcTemplate.queryForList(
                 "SELECT name FROM sqlite_master WHERE type = 'table' "
                         + "AND name NOT LIKE 'sqlite_%' ORDER BY name", String.class);
-        assertEquals(List.of("buyer", "cart", "category", "intent", "order_item", "payment",
+        assertEquals(List.of("buyer", "cart", "category", "favorite", "intent", "order_item", "payment",
                 "product", "product_image", "seller", "stock_restore"), tables);
 
         // 2. 种子数据不重复插入

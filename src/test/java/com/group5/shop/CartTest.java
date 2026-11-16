@@ -11,6 +11,7 @@ import com.group5.shop.product.domain.Category;
 import com.group5.shop.product.domain.CategoryMapper;
 import com.group5.shop.product.domain.Product;
 import com.group5.shop.product.domain.ProductMapper;
+import com.group5.shop.product.favorite.FavoriteService;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -78,6 +79,8 @@ class CartTest {
 
     @Autowired
     private CartMapper cartMapper;
+    @Autowired
+    private FavoriteService favorites;
 
     @Autowired
     private ProductMapper productMapper;
@@ -335,17 +338,32 @@ class CartTest {
 
     @Test
     @Order(12)
-    @DisplayName("转收藏：收藏域未接入时给出明确提示，且不清空购物车")
-    void 转收藏在端口缺席时优雅降级() throws Exception {
-        long before = cartMapper.countByBuyer(buyerAId);
+    @DisplayName("转收藏：选中的重复收藏和已下架商品都移出购物车")
+    void 转收藏只移除选中商品() throws Exception {
+        Long categoryId = categoryMapper.selectEnabled().get(0).getId();
+        Long alreadySaved = insertProduct("已收藏后加购", categoryId, 500L, 5, ProductStatus.ON_SALE);
+        Long offShelf = insertProduct("加购后下架", categoryId, 500L, 5, ProductStatus.ON_SALE);
+        Long unselected = insertProduct("留在购物车", categoryId, 500L, 5, ProductStatus.ON_SALE);
+        Cookie cookie = loginCookie(BUYER_B);
+        for (Long productId : List.of(alreadySaved, offShelf, unselected)) {
+            mockMvc.perform(post("/cart/add").cookie(cookie).param("productId", productId.toString()))
+                    .andExpect(redirectedUrlPattern("/products/" + productId + "?msg=*"));
+        }
+        assertThat(favorites.addToFavorites(buyerBId, List.of(alreadySaved))).isEqualTo(1);
+        Product product = productMapper.selectById(offShelf);
+        product.setStatus("off_shelf");
+        productMapper.updateById(product);
 
-        MvcResult result = mockMvc.perform(post("/cart/to-favorites").cookie(loginCookie(BUYER_A)))
-                .andExpect(status().isFound())
-                .andExpect(redirectedUrlPattern("/cart?error=*"))
-                .andReturn();
+        String firstId = cartMapper.selectByBuyerAndProduct(buyerBId, alreadySaved).getId().toString();
+        String secondId = cartMapper.selectByBuyerAndProduct(buyerBId, offShelf).getId().toString();
+        mockMvc.perform(post("/cart/to-favorites").cookie(cookie).param("cartIds", firstId, secondId))
+                .andExpect(redirectedUrlPattern("/cart?msg=*"));
 
-        assertThat(result.getResponse().getRedirectedUrl()).contains("FavoritePort");
-        assertThat(cartMapper.countByBuyer(buyerAId)).isEqualTo(before);
+        assertThat(cartMapper.selectByBuyerAndProduct(buyerBId, alreadySaved)).isNull();
+        assertThat(cartMapper.selectByBuyerAndProduct(buyerBId, offShelf)).isNull();
+        assertThat(cartMapper.selectByBuyerAndProduct(buyerBId, unselected)).isNotNull();
+        assertThat(favorites.list(buyerBId)).extracting(Product::getId)
+                .containsExactlyInAnyOrder(alreadySaved, offShelf);
     }
 
     @Test

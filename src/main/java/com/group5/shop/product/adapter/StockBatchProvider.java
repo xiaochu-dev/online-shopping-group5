@@ -4,6 +4,7 @@ import com.group5.shop.common.constant.ProductStatus;
 import com.group5.shop.portal.port.StockBatchPort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -48,6 +49,7 @@ public class StockBatchProvider implements StockBatchPort {
     }
 
     @Override
+    @Transactional
     public DeductResult deduct(List<Demand> demands) {
         List<Demand> deducted = new ArrayList<>();
         List<Shortage> shortages = new ArrayList<>();
@@ -68,12 +70,12 @@ public class StockBatchProvider implements StockBatchPort {
                     "UPDATE product SET stock = stock - ?, updated_at = ?, "
                             + "status = CASE WHEN stock - ? = 0 THEN ? ELSE status END, "
                             + "off_reason = CASE WHEN stock - ? = 0 THEN 'auto' ELSE off_reason END "
-                            + "WHERE id = ? AND stock >= ? AND status IN (?, ?)",
+                            + "WHERE id = ? AND stock >= ? AND status = ?",
                     demand.quantity(), now,
                     demand.quantity(), OFF_SHELF,
                     demand.quantity(),
                     demand.productId(), demand.quantity(),
-                    ProductStatus.ON_SALE, ProductStatus.FROZEN);
+                    ProductStatus.ON_SALE);
 
             if (changed == 1) {
                 deducted.add(demand);
@@ -84,7 +86,7 @@ public class StockBatchProvider implements StockBatchPort {
             Snapshot snapshot = snapshotOf(demand.productId());
             if (snapshot == null) {
                 shortages.add(new Shortage(demand.productId(), demand.quantity(), 0, "商品不存在"));
-            } else if (!snapshot.purchasable()) {
+            } else if (!snapshot.onSale()) {
                 shortages.add(new Shortage(demand.productId(), demand.quantity(), 0, "已下架"));
             } else {
                 shortages.add(new Shortage(demand.productId(), demand.quantity(),
@@ -95,6 +97,7 @@ public class StockBatchProvider implements StockBatchPort {
     }
 
     @Override
+    @Transactional
     public void restore(Long orderId, List<Demand> demands) {
         if (orderId == null || demands == null || demands.isEmpty()) {
             return;
@@ -138,17 +141,15 @@ public class StockBatchProvider implements StockBatchPort {
         String status = row.get("status") == null ? "" : row.get("status").toString();
         Object stockValue = row.get("stock");
         int stock = stockValue == null ? 0 : ((Number) stockValue).intValue();
-        boolean purchasable = (ProductStatus.ON_SALE.equals(status)
-                || ProductStatus.FROZEN.equals(status)) && stock > 0;
-        return new Snapshot(stock, purchasable);
+        return new Snapshot(stock, ProductStatus.ON_SALE.equals(status));
     }
 
     /**
      * 商品的库存快照。
      *
      * @param stock       当前库存
-     * @param purchasable 是否处于可售状态（在售/冻结且有货）
+     * @param onSale 是否在售
      */
-    private record Snapshot(int stock, boolean purchasable) {
+    private record Snapshot(int stock, boolean onSale) {
     }
 }
