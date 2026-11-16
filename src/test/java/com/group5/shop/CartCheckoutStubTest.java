@@ -70,10 +70,16 @@ class CartCheckoutStubTest {
         private final List<String> received = new ArrayList<>();
 
         @Override
-        public Long createOrder(Long buyerId, List<CartCheckoutLine> lines) {
-            lines.forEach(line -> received.add(
-                    buyerId + ":" + line.productId() + "x" + line.quantity() + "@" + line.unitPriceCents()));
-            return 888_001L;
+        public Result createOrder(Long buyerId, List<CartCheckoutLine> lines) {
+            List<Long> accepted = new ArrayList<>();
+            lines.forEach(line -> {
+                received.add(buyerId + ":" + line.productId() + "x" + line.quantity()
+                        + "@" + line.unitPriceCents());
+                accepted.add(line.productId());
+            });
+            // 桩全部接单：这个用例证明的是「端口一实现，购物车不用改一行」，
+            // 缺货按件返回的行为由 OrderStateMachineTest 用真实实现验证
+            return new Result(888_001L, "SO-STUB-888001", accepted, List.of());
         }
     }
 

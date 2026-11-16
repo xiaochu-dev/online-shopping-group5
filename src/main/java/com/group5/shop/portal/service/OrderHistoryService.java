@@ -5,6 +5,8 @@ import com.group5.shop.common.exception.BusinessException;
 import com.group5.shop.portal.domain.Intent;
 import com.group5.shop.portal.domain.IntentMapper;
 import com.group5.shop.portal.domain.OrderItem;
+import com.group5.shop.portal.domain.OrderLine;
+import com.group5.shop.portal.domain.OrderLineMapper;
 import com.group5.shop.product.domain.Product;
 import com.group5.shop.product.domain.ProductMapper;
 import org.springframework.stereotype.Service;
@@ -38,12 +40,15 @@ public class OrderHistoryService {
     private final IntentMapper intentMapper;
     private final ProductMapper productMapper;
     private final OrderStatusService orderStatusService;
+    private final OrderLineMapper orderLineMapper;
 
     public OrderHistoryService(IntentMapper intentMapper, ProductMapper productMapper,
-                               OrderStatusService orderStatusService) {
+                               OrderStatusService orderStatusService,
+                               OrderLineMapper orderLineMapper) {
         this.intentMapper = intentMapper;
         this.productMapper = productMapper;
         this.orderStatusService = orderStatusService;
+        this.orderLineMapper = orderLineMapper;
     }
 
     /**
@@ -124,12 +129,22 @@ public class OrderHistoryService {
             productMap.put(product.getId(), product);
         }
 
+        // 明细也一次批量取回：一张订单多件商品时，页面要展示「键盘 ×2、教材 ×1」
+        List<Long> intentIds = intents.stream().map(Intent::getId).toList();
+        Map<Long, List<OrderLine>> linesByIntent = new HashMap<>();
+        for (OrderLine line : orderLineMapper.selectByIntentIds(intentIds)) {
+            linesByIntent.computeIfAbsent(line.getIntentId(), key -> new ArrayList<>()).add(line);
+        }
+
         for (Intent intent : intents) {
             Product product = productMap.get(intent.getProductId());
+            List<OrderLine> lines = linesByIntent.getOrDefault(intent.getId(), List.of());
+            intent.setLines(lines);
             items.add(new OrderItem(intent,
                     product == null ? "（商品已不可见）" : product.getName(),
                     product == null ? "images/placeholder.png" : product.getImagePath(),
-                    product == null ? null : product.getPriceCents()));
+                    product == null ? null : product.getPriceCents(),
+                    lines));
         }
         return items;
     }

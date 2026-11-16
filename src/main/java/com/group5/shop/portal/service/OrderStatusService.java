@@ -237,13 +237,28 @@ public class OrderStatusService {
      *
      * <p>{@code intent} 表没有 {@code seller_id}：订单属于商品，商品属于卖家。
      * 所以归属校验必须经过商品表，不能省。</p>
+     *
+     * <p><b>多件订单看明细</b>：B.2.3 允许一张订单含多件商品，而这些商品可能属于不同卖家。
+     * 只按订单头的 {@code product_id}（首件）判定，会让第二个卖家永远推不动这张单，
+     * 变成谁都处理不了的死单。所以改为「订单内<b>任一件</b>商品属于该卖家即可操作整单」，
+     * 这是 B 没有要求按卖家拆单时最省事且不会卡死的口径。</p>
      */
     private Intent requireSellerOrder(Long intentId, Long sellerId) {
         Intent intent = requireIntent(intentId);
-        Product product = productMapper.selectById(intent.getProductId());
-        if (product == null || sellerId == null || !sellerId.equals(product.getSellerId())) {
+        if (sellerId == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "订单不存在或不属于当前商家");
         }
-        return intent;
+
+        List<OrderLine> lines = orderLineMapper.selectByIntentId(intentId);
+        List<Long> productIds = lines.isEmpty()
+                ? List.of(intent.getProductId())
+                : lines.stream().map(OrderLine::getProductId).distinct().toList();
+        for (Long productId : productIds) {
+            Product product = productMapper.selectById(productId);
+            if (product != null && sellerId.equals(product.getSellerId())) {
+                return intent;
+            }
+        }
+        throw new BusinessException(ErrorCode.NOT_FOUND, "订单不存在或不属于当前商家");
     }
 }

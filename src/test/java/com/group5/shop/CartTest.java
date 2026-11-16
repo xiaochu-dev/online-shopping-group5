@@ -254,7 +254,8 @@ class CartTest {
 
         assertThat(html).contains("购物车测试商品·在售");
         assertThat(html).as("99 件 × 19.90 = 1970.10").contains("1970.10");
-        assertThat(html).as("订单域尚未接入时应给出明确提示，而不是空白按钮").contains("结算待接入");
+        assertThat(html).as("订单域已接入（OrderCreateProvider），结算按钮必须可用")
+                .doesNotContain("结算待接入");
     }
 
     @Test
@@ -297,20 +298,21 @@ class CartTest {
 
     @Test
     @Order(11)
-    @DisplayName("结算：订单域未接入时给出明确提示，且不清空购物车")
-    void 结算在端口缺席时优雅降级() throws Exception {
+    @DisplayName("结算：下不了单时回到购物车并保留条目，不整车清空")
+    void 结算失败时不清空购物车() throws Exception {
+        // 车里是 99 件、库存只有 10 件：这一件必然下不成（逐件拦截，不整单成功也不整单丢货）
         long before = cartMapper.countByBuyer(buyerAId);
+        assertThat(before).isPositive();
 
         MvcResult result = mockMvc.perform(post("/cart/checkout").cookie(loginCookie(BUYER_A)))
                 .andExpect(status().isFound())
-                .andExpect(redirectedUrlPattern("/cart?error=*"))
                 .andReturn();
 
         assertThat(result.getResponse().getRedirectedUrl())
-                .as("提示应说明是「下单功能尚未接入」而不是系统错误")
-                .contains("OrderCreatePort");
+                .as("失败要回购物车并带上原因，而不是跳到别处")
+                .contains("/cart?");
         assertThat(cartMapper.countByBuyer(buyerAId))
-                .as("结算失败不得清空购物车").isEqualTo(before);
+                .as("下不成的商品必须留在车里，否则买家以为买到了").isEqualTo(before);
     }
 
     @Test

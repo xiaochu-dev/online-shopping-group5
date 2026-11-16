@@ -103,6 +103,7 @@ public class CartService {
         }
 
         CartProductSnapshot snapshot = requirePurchasable(productId);
+        requireStockEnough(snapshot, delta);
         long now = TimeUtils.nowMillis();
 
         Cart existing = cartMapper.selectByBuyerAndProduct(buyerId, productId);
@@ -124,6 +125,7 @@ public class CartService {
             throw new BusinessException(ErrorCode.PARAM_INVALID,
                     "同一商品最多 " + MAX_QUANTITY + " 件，购物车里已有 " + existing.getQuantity() + " 件");
         }
+        requireStockEnough(snapshot, merged);
         // 顺带用最新一次加购的价格刷新快照：买家看到的是「最近一次加购时的价格」
         existing.setQuantity(merged);
         existing.setProductName(snapshot.name());
@@ -150,6 +152,24 @@ public class CartService {
         }
     }
 
+    /**
+     * 加购时的「数量 ≤ 当前库存」校验。
+     *
+     * <p><b>校验但不占用</b>：购物车不锁库存（澄清 Q8），这里只拦明显买不到的数量，
+     * 避免买家往车里塞 99 件而库存只有 3 件、到结算才被整件打回。真正的抢占在结算时
+     * 由订单域的条件 UPDATE 决定，所以这一步放宽一点也不会有超卖。</p>
+     */
+    private void requireStockEnough(CartProductSnapshot snapshot, int wanted) {
+        if (snapshot.stock() <= 0) {
+            return;
+        }
+        if (wanted > snapshot.stock()) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID,
+                    "「" + snapshot.name() + "」仅剩 " + snapshot.stock() + " 件，最多只能买 "
+                            + snapshot.stock() + " 件");
+        }
+    }
+
     /** 删除单条（同样带 buyer_id 过滤） */
     public void remove(Long buyerId, Long cartId) {
         int rows = cartMapper.deleteByIdAndBuyer(cartId, buyerId);
@@ -168,13 +188,17 @@ public class CartService {
     // ==================================================================
 
     /**
-     * 结算：把选中的条目交给订单域生成订单，成功后从购物车移除。
+     * 结算：把选中的条目交给订单域生成订单，<b>只把下成单的行</b>从购物车移除。
+     *
+     * <p>缺货件留在车里，页面会标红提示。这不是「清得不干净」，而是澄清 Q3 的直接结果：
+     * 多件下单逐件拦截，缺货那件<b>没有</b>下单，如果一并清掉，买家会以为它买到了，
+     * 只能重新去搜一遍。留在车里，改个数量就能再结算。</p>
      *
      * @param cartIds 选中的购物车条目 id；为空表示整车结算
-     * @return 新建订单 id
+     * @return 下单结果（订单号 + 接单件 + 缺货件）
      */
     @Transactional
-    public Long checkout(Long buyerId, List<Long> cartIds) {
+    public OrderCreatePort.Result checkout(Long buyerId, List<Long> cartIds) {
         OrderCreatePort port = orderCreatePort.getIfAvailable();
         if (port == null) {
             throw new BusinessException(ErrorCode.PARAM_INVALID,
@@ -191,9 +215,15 @@ public class CartService {
                         row.getPriceCents() == null ? 0L : row.getPriceCents()))
                 .collect(Collectors.toList());
 
-        Long orderId = port.createOrder(buyerId, lines);
-        cartMapper.deleteByBuyerAndIds(buyerId, joinIds(selected));
-        return orderId;
+        OrderCreatePort.Result result = port.createOrder(buyerId, lines);
+
+        List<Cart> acceptedRows = selected.stream()
+                .filter(row -> result.acceptedProductIds().contains(row.getProductId()))
+                .collect(Collectors.toList());
+        if (!acceptedRows.isEmpty()) {
+            cartMapper.deleteByBuyerAndIds(buyerId, joinIds(acceptedRows));
+        }
+        return result;
     }
 
     /**

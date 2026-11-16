@@ -3,6 +3,8 @@ package com.group5.shop.portal.service;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.group5.shop.buyer.domain.Buyer;
+import com.group5.shop.cart.port.CartCheckoutLine;
+import com.group5.shop.cart.port.OrderCreatePort;
 import com.group5.shop.common.api.PageResult;
 import com.group5.shop.common.constant.IntentStatus;
 import com.group5.shop.common.constant.ProductStatus;
@@ -37,11 +39,12 @@ import java.util.Map;
  * <ol>
  *   <li><b>买家只看得到在售 / 交易中的商品</b>：已下架的既不进列表，也不能提交意向。
  *       交易中（frozen）可见但不可下单——买家需要知道「这件商品还在，只是正被别人成交」；</li>
- *   <li><b>提交意向不扣库存</b>：扣减只发生在卖家标「交易成功」时（T2-18）。
- *       交易中商品整件冻结、商品级互斥，因此不存在超卖；</li>
- *   <li><b>同一买家 + 同一商品最多 1 条未结束意向</b>：下单必须登录，身份即账号，
- *       重复提交没有意义，只会把队列塞满同一个人；</li>
- *   <li><b>先到先得靠「提交时间 + 自增 id」</b>：不落库位次字段，一条结束后面自然前移。</li>
+ *   <li><b>下单即扣库存</b>：迭代 4（挑战需求 B）起，提交订单时逐件扣减，
+ *       不再是「卖家成交时才扣」；取消时由状态机回补（见 {@code OrderStatusService}）；</li>
+ *   <li><b>允许多笔订单并存</b>：B 取消「同一买家 + 同一商品只能有一条未结束订单」的约束，
+ *       复购与购物车多件下单都需要它；防连点交给应用层与页面，不再靠唯一索引；</li>
+ *   <li><b>下单只有一条链路</b>：本类的 {@link #submitOrder} 只是「单件明细」的便捷入口，
+ *       真正的扣库存、建单、写明细全在 {@link OrderCreateProvider}。两条路各写一份必然走偏。</li>
  * </ol>
  *
  * @author 周到
@@ -59,15 +62,18 @@ public class PortalService {
     private final IntentMapper intentMapper;
     private final CategoryPort categoryPort;
     private final ProductPort productPort;
+    private final OrderCreateProvider orderCreateProvider;
 
     public PortalService(ProductMapper productMapper,
                          IntentMapper intentMapper,
                          CategoryPort categoryPort,
-                         ProductPort productPort) {
+                         ProductPort productPort,
+                         OrderCreateProvider orderCreateProvider) {
         this.productMapper = productMapper;
         this.intentMapper = intentMapper;
         this.categoryPort = categoryPort;
         this.productPort = productPort;
+        this.orderCreateProvider = orderCreateProvider;
     }
 
     // ==================================================================
@@ -187,60 +193,40 @@ public class PortalService {
     // ==================================================================
 
     /**
-     * 提交购买意向：写入一条 {@code pending} 记录，<b>不扣库存、不生成口令码</b>。
+     * 提交订单（商品详情页入口）：单件明细的便捷包装。
      *
-     * <p>三项快照（姓名 / 电话 / 交易地点）在下单这一刻抄进 intent，
-     * 客户之后改资料不影响历史单展示。</p>
+     * <p><b>迭代 4 起不再自己写库</b>：扣库存、建订单头、写明细、生成订单号全在
+     * {@link OrderCreateProvider}。购物车结算走的是同一个方法，两个入口不会走出两种语义
+     * （一个扣过库存、一个没扣）。</p>
+     *
+     * <p>这里只保留三项前置校验，因为它们要给出与页面一致的文案：商品不存在、交易中、
+     * 已下架。地址与库存的最终判定仍然在提供方那边做——页面文案可以重复，规则不行。</p>
      *
      * @param buyer        登录买家（账号与客户模块的正式实体，调用方已保证非空）
      * @param productId    商品 id
      * @param tradeAddress 本单交易地点；为空时用买家默认地点
-     * @return 新写入的意向
-     * @throws BusinessException 商品不可下单、库存为 0、或本人已有未结束的意向
+     * @return 新写入的订单
+     * @throws BusinessException 商品不可下单、库存不足、或没填交易地点
      */
     @Transactional
     public Intent submitOrder(Buyer buyer, Long productId, String tradeAddress) {
-        Long buyerId = buyer.getId();
         Product product = productMapper.selectById(productId);
-        if (product == null || !ProductStatus.ON_SALE.equals(product.getStatus())) {
+        if (product == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "商品不存在或已下架，无法提交意向");
+        }
+        if (ProductStatus.FROZEN.equals(product.getStatus())) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID, "该商品正在交易中，暂时无法提交意向");
+        }
+        if (!ProductStatus.ON_SALE.equals(product.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "商品不存在或已下架，无法提交意向");
         }
 
-        // 库存为 0：商品中心应已自动下架（T2-10）；在其就绪前这里兜住
-        Integer stock = productPort.stockOf(productId);
-        if (stock != null && stock <= 0) {
-            throw new BusinessException(ErrorCode.PARAM_INVALID, "该商品已售罄，暂时无法提交意向");
-        }
-
-        // 同一买家 + 同一商品，同时最多 1 条未结束意向
-        if (intentMapper.countActiveByBuyer(buyerId, productId) > 0) {
-            throw new BusinessException(ErrorCode.PARAM_INVALID,
-                    "你已对该商品提交过意向，请在卖家处理后再次购买");
-        }
-
-        // 交易地点必填（挑战需求 A.2）：下单时填的优先，没填就用注册时的默认地点；
-        // 两者都空则直接拒绝，绝不能把空地址写进队列——卖家拿到一条没有交付地点的
-        // 意向既无法成交也无法跳过（先到先得只允许处理队首），只能由后台清库，等于死锁。
-        String address = StringUtils.hasText(tradeAddress)
-                ? tradeAddress.trim()
-                : nullToEmpty(buyer.getDefaultPlace()).trim();
-        if (address.isEmpty()) {
-            throw new BusinessException(ErrorCode.PARAM_INVALID,
-                    "请填写交易地点后再提交意向（可在注册资料的默认交易地点里预先填写）");
-        }
-
-        Intent intent = new Intent();
-        intent.setProductId(productId);
-        intent.setBuyerId(buyerId);
-        intent.setBuyerName(nullToEmpty(buyer.getUsername()));
-        intent.setPhone(nullToEmpty(buyer.getPhone()));
-        intent.setTradeAddress(address);
-        // 主路径不生成口令码（基线验收物仍可凭存量码撤销）
-        intent.setTokenCode(null);
-        intent.setStatus(IntentStatus.CREATED);
-        intent.setCreatedAt(TimeUtils.nowMillis());
-        intentMapper.insert(intent);
-        return intent;
+        long referencePrice = product.getPriceCents() == null ? 0L : product.getPriceCents();
+        OrderCreatePort.Result result = orderCreateProvider.createOrder(
+                buyer.getId(),
+                List.of(new CartCheckoutLine(productId, 1, referencePrice)),
+                tradeAddress);
+        return intentMapper.selectById(result.orderId());
     }
 
     // ==================================================================

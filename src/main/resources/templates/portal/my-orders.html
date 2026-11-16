@@ -44,6 +44,10 @@
                             <a th:href="@{'/products/' + ${row.intent().productId}}"
                                th:text="${row.name()}">商品名</a>
                             <div class="muted" th:text="'¥ ' + ${row.priceYuan()}">¥ 0.00</div>
+                            <!-- 多件订单（B.2.3）：展开「键盘 ×2、教材 ×1」；单件与老单不占地方 -->
+                            <div class="muted" th:if="${row.multiLine()}"
+                                 th:text="${row.itemsText()}">机械键盘 ×2</div>
+                            <div class="muted" th:text="'共 ' + ${row.totalQuantity()} + ' 件'">共 1 件</div>
                         </div>
                     </div>
                 </td>
@@ -99,6 +103,10 @@
                                 <a th:href="@{'/products/' + ${row.intent().productId}}"
                                    th:text="${row.name()}">商品名</a>
                                 <div class="muted" th:text="'¥ ' + ${row.priceYuan()}">¥ 0.00</div>
+                            <!-- 多件订单（B.2.3）：展开「键盘 ×2、教材 ×1」；单件与老单不占地方 -->
+                            <div class="muted" th:if="${row.multiLine()}"
+                                 th:text="${row.itemsText()}">机械键盘 ×2</div>
+                            <div class="muted" th:text="'共 ' + ${row.totalQuantity()} + ' 件'">共 1 件</div>
                             </div>
                         </div>
                     </td>

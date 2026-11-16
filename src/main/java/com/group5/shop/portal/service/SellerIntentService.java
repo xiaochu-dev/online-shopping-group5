@@ -6,10 +6,13 @@ import com.group5.shop.common.exception.BusinessException;
 import com.group5.shop.common.exception.ErrorCode;
 import com.group5.shop.portal.domain.Intent;
 import com.group5.shop.portal.domain.IntentMapper;
+import com.group5.shop.portal.domain.OrderLine;
+import com.group5.shop.portal.domain.OrderLineMapper;
 import com.group5.shop.product.domain.Product;
 import com.group5.shop.product.domain.ProductMapper;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,10 +35,13 @@ public class SellerIntentService {
 
     private final IntentMapper intentMapper;
     private final ProductMapper productMapper;
+    private final OrderLineMapper orderLineMapper;
 
-    public SellerIntentService(IntentMapper intentMapper, ProductMapper productMapper) {
+    public SellerIntentService(IntentMapper intentMapper, ProductMapper productMapper,
+                               OrderLineMapper orderLineMapper) {
         this.intentMapper = intentMapper;
         this.productMapper = productMapper;
+        this.orderLineMapper = orderLineMapper;
     }
 
     /**
@@ -79,7 +85,32 @@ public class SellerIntentService {
      * @return 订单列表
      */
     public List<Intent> ordersOfProduct(Long productId, String status) {
-        return intentMapper.selectByProduct(productId, status);
+        List<Intent> orders = intentMapper.selectByProduct(productId, status);
+        attachLines(orders);
+        return orders;
+    }
+
+    /**
+     * 给订单挂明细（一张订单可能含多件商品，B.2.3）。
+     *
+     * <p>一次批量查、按订单分组，避免「20 行订单 = 20 次查明细」。老意向单没有明细，
+     * 挂空列表，模板降级成只显示首件商品。</p>
+     */
+    private void attachLines(List<Intent> orders) {
+        if (orders.isEmpty()) {
+            return;
+        }
+        List<Long> intentIds = new ArrayList<>(orders.size());
+        for (Intent order : orders) {
+            intentIds.add(order.getId());
+        }
+        Map<Long, List<OrderLine>> grouped = new HashMap<>();
+        for (OrderLine line : orderLineMapper.selectByIntentIds(intentIds)) {
+            grouped.computeIfAbsent(line.getIntentId(), key -> new ArrayList<>()).add(line);
+        }
+        for (Intent order : orders) {
+            order.setLines(grouped.getOrDefault(order.getId(), List.of()));
+        }
     }
 
     /**

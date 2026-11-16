@@ -32,6 +32,20 @@ public interface OrderLineMapper extends BaseMapper<OrderLine> {
     List<OrderLine> selectByIntentId(@Param("intentId") Long intentId);
 
     /**
+     * 一批订单的明细（列表页用，避免每行一次查询）。
+     *
+     * <p>卖家页一屏 20 单、我的订单一页 10 单，逐行查明细就是 20~30 次往返；
+     * SQLite 单连接下这会让页面明显变慢。</p>
+     *
+     * @param intentIds 订单 id 列表，不能为空
+     * @return 明细列表（未分组），按订单与 id 升序
+     */
+    @Select("<script>SELECT " + COLUMNS + " FROM order_item WHERE intent_id IN "
+            + "<foreach item='id' collection='intentIds' open='(' separator=',' close=')'>#{id}</foreach> "
+            + "ORDER BY intent_id ASC, id ASC</script>")
+    List<OrderLine> selectByIntentIds(@Param("intentIds") List<Long> intentIds);
+
+    /**
      * 某订单的件数合计（「共 N 件」文案用）。
      *
      * @param intentId 订单头 id

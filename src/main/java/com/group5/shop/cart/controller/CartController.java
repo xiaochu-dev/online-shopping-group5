@@ -3,6 +3,7 @@ package com.group5.shop.cart.controller;
 import com.group5.shop.buyer.context.BuyerContext;
 import com.group5.shop.buyer.domain.Buyer;
 import com.group5.shop.cart.domain.Cart;
+import com.group5.shop.cart.port.OrderCreatePort;
 import com.group5.shop.cart.service.CartService;
 import com.group5.shop.common.exception.BusinessException;
 import com.group5.shop.common.util.MoneyUtils;
@@ -118,6 +119,9 @@ public class CartController {
     /**
      * 结算：选中条目 → 订单。
      *
+     * <p>部分缺货时<b>回到购物车</b>而不是跳「我的订单」：买家需要看到哪几件没下成、
+     * 车里的那一行还在，才能改数量重试。全部成功才跳订单页。</p>
+     *
      * @param cartIds 勾选的购物车条目 id；不传表示整车结算
      */
     @PostMapping("/checkout")
@@ -127,8 +131,13 @@ public class CartController {
             return redirectToLogin("/cart");
         }
         try {
-            Long orderId = cartService.checkout(buyer.getId(), cartIds);
-            return "redirect:/my/orders?msg=" + encode("下单成功，订单号 " + orderId);
+            OrderCreatePort.Result result = cartService.checkout(buyer.getId(), cartIds);
+            String success = "下单成功，订单号 " + result.orderNo();
+            if (result.partial()) {
+                return "redirect:/cart?msg=" + encode(
+                        success + "；以下商品没下成，已留在购物车：" + result.shortageText());
+            }
+            return "redirect:/my/orders?msg=" + encode(success);
         } catch (BusinessException e) {
             return "redirect:/cart?error=" + encode(e.getMessage());
         }

@@ -2,6 +2,8 @@ package com.group5.shop;
 
 import com.group5.shop.buyer.context.BuyerContext;
 import com.group5.shop.buyer.domain.Buyer;
+import com.group5.shop.buyer.domain.BuyerMapper;
+import com.group5.shop.buyer.domain.Buyer;
 import com.group5.shop.common.constant.IntentStatus;
 import com.group5.shop.common.constant.ProductStatus;
 import com.group5.shop.portal.domain.Intent;
@@ -79,6 +81,9 @@ class PortalFlowTest {
     @Autowired
     private CategoryMapper categoryMapper;
 
+    @Autowired
+    private BuyerMapper buyerMapper;
+
     @MockBean
     private BuyerContext buyerContext;
 
@@ -113,6 +118,11 @@ class PortalFlowTest {
         Long digitalId = categories.get(0).getId();
         bookCategoryId = categories.get(1).getId();
 
+        // 下单会真实扣库存（B 的口径），给足库存，别让后面的用例因为售罄而失败
+        insertBuyer(BUYER_ID, "测试客户", "13800000000", "图书馆门口");
+        insertBuyer(OTHER_BUYER_ID, "另一位客户", "13900000000", "东门快递点");
+        insertBuyer(9003L, "没填地点的客户", "13700000000", null);
+
         onSaleId = insertProduct("机械键盘 87 键", "青轴，白色背光", digitalId, 29900L, ProductStatus.ON_SALE);
         textbookId = insertProduct("软件工程实践教材", "2026 版，含实验指导", bookCategoryId, 4550L, ProductStatus.ON_SALE);
         delistedId = insertProduct("已下架的旧款鼠标", "这款应当对买家不可见", digitalId, 9900L, ProductStatus.DELISTED);
@@ -136,12 +146,32 @@ class PortalFlowTest {
         p.setDescription(desc);
         p.setImagePath("images/placeholder.png");
         p.setPriceCents(priceCents);
+        p.setStock(10);
         p.setStatus(status);
         long now = System.currentTimeMillis();
         p.setPublishedAt(now);
         p.setUpdatedAt(now);
         productMapper.insert(p);
         return p.getId();
+    }
+
+    /**
+     * 把买家写进库。
+     *
+     * <p>本类用 {@code @MockBean} 顶替登录态，买家对象是 new 出来的；但下单链路
+     * （{@code OrderCreateProvider}）要读买家资料做姓名/电话/默认地点快照，
+     * 库里没有这条记录就下不了单。所以 seed 时把三个测试买家真实落库。</p>
+     */
+    private void insertBuyer(Long id, String username, String phone, String place) {
+        Buyer buyer = new Buyer();
+        buyer.setId(id);
+        buyer.setUsername(username);
+        buyer.setPasswordHash("x");
+        buyer.setSalt("y");
+        buyer.setPhone(phone);
+        buyer.setDefaultPlace(place);
+        buyer.setCreatedAt(System.currentTimeMillis());
+        buyerMapper.insert(buyer);
     }
 
     /** 把响应正文按 UTF-8 取出来（默认按 ISO-8859-1 读，中文会乱码） */
@@ -286,15 +316,17 @@ class PortalFlowTest {
 
     @Test
     @Order(11)
-    void 同一买家对同一商品重复提交被拒() throws Exception {
+    void 同一买家可以再次下单_B允许多笔订单() throws Exception {
+        // 迭代 1~3 的「一人一商品只许一条未结束意向」随 B 作废（记录 §四 R5）：
+        // 复购与购物车多件下单都需要它，防连点改由页面与应用层处理
         mockMvc.perform(post("/products/" + onSaleId + "/intents"))
                 .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrlPattern("/products/" + onSaleId + "?error=*"));
+                .andExpect(redirectedUrlPattern("/products/" + onSaleId + "?msg=*"));
 
         long active = intentMapper.selectActiveByProduct(onSaleId).stream()
                 .filter(i -> BUYER_ID.equals(i.getBuyerId()))
                 .count();
-        assertThat(active).as("同一买家同一商品最多 1 条未结束意向").isEqualTo(1);
+        assertThat(active).as("B 允许多笔进行中的订单，第二次下单必须成功").isEqualTo(2);
     }
 
     @Test

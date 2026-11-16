@@ -67,6 +67,21 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_order_item ON order_item (intent_id, produc
 CREATE INDEX IF NOT EXISTS idx_order_item_intent ON order_item (intent_id);
 
 -- --------------------------------------------------------------------------
+-- stock_restore 取消回补台账（T4-06 / T4-08）
+-- --------------------------------------------------------------------------
+-- B 的库存口径是「下单即扣、取消回补」（11-15 答复 Q2）。回补必须**只发生一次**：
+-- 商家与客户几乎同时点取消、或者页面重复提交时，若不记账就会把同一张单的货回补两次，
+-- 库存凭空变多。这里以 order_id 为主键，`INSERT OR IGNORE` 的结果就是「我是第一次回补吗」。
+--
+-- 为什么不复用 intent.status：状态在同一事务里已经先改成 cancelled 了，
+-- 第二次进入回补时读到的也是 cancelled，分不出「刚才是谁改的」。
+CREATE TABLE IF NOT EXISTS stock_restore
+(
+    order_id    INTEGER PRIMARY KEY,          -- 一张订单只回补一次
+    restored_at INTEGER NOT NULL
+);
+
+-- --------------------------------------------------------------------------
 -- 索引：与查询路径一一对应
 -- --------------------------------------------------------------------------
 -- 卖家后台：按状态筛选（B.1.1「页面上能按状态筛选」）

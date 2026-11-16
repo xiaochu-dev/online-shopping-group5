@@ -1,10 +1,13 @@
 package com.group5.shop.portal.domain;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.group5.shop.common.constant.IntentStatus;
 import com.group5.shop.common.util.TimeUtils;
+
+import java.util.List;
 
 /**
  * 购买意向实体，对应表 {@code intent}（T2-06 建立，T2-16 / T2-17 / T2-18 扩展）。
@@ -75,9 +78,51 @@ public class Intent {
     /** 交易时间（置为 success / failed 的时刻），毫秒；未结束为 null */
     private Long finishedAt;
 
+    /**
+     * 订单明细（<b>非表字段</b>）。
+     *
+     * <p>B.2.3 起一张订单可以含多件商品，明细在 {@code order_item}。列表页一次批量查出、
+     * 挂在这里给模板用；不填就是空的，页面按「没有明细」降级（老意向单本来就没有明细）。</p>
+     */
+    @TableField(exist = false)
+    private List<OrderLine> lines;
+
     // ------------------------------------------------------------------
     // 页面便捷方法
     // ------------------------------------------------------------------
+
+    /** 订单明细摘要，如「机械键盘 ×2、教材 ×1」；无明细返回空串（老单） */
+    public String getItemsText() {
+        if (lines == null || lines.isEmpty()) {
+            return "";
+        }
+        StringBuilder text = new StringBuilder();
+        for (OrderLine line : lines) {
+            if (!text.isEmpty()) {
+                text.append('、');
+            }
+            text.append(line.getProductName() == null ? "商品" : line.getProductName())
+                    .append(" ×").append(line.getQuantity() == null ? 0 : line.getQuantity());
+        }
+        return text.toString();
+    }
+
+    /** 订单件数合计（明细缺失时按 1 件算，兼容老意向单） */
+    public int getTotalQuantity() {
+        if (lines == null || lines.isEmpty()) {
+            return 1;
+        }
+        int total = 0;
+        for (OrderLine line : lines) {
+            total += line.getQuantity() == null ? 0 : line.getQuantity();
+        }
+        return total;
+    }
+
+    /** 是否是多件订单（页面据此决定要不要展开明细） */
+    public boolean isMultiLine() {
+        return lines != null && lines.size() > 1;
+    }
 
     /** 供页面直接使用：{@code ${i.statusLabel}} */
     public String getStatusLabel() {
@@ -276,5 +321,13 @@ public class Intent {
 
     public void setFinishedAt(Long finishedAt) {
         this.finishedAt = finishedAt;
+    }
+
+    public List<OrderLine> getLines() {
+        return lines;
+    }
+
+    public void setLines(List<OrderLine> lines) {
+        this.lines = lines;
     }
 }

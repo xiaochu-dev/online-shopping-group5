@@ -44,7 +44,8 @@ public class ProductReadProvider implements ProductReadPort {
         boolean onSale = ProductStatus.ON_SALE.equals(product.getStatus());
         boolean inStock = product.getStock() != null && product.getStock() > 0;
         long price = product.getPriceCents() == null ? 0L : product.getPriceCents();
+        int stock = product.getStock() == null ? 0 : product.getStock();
         return Optional.of(new CartProductSnapshot(product.getId(), product.getName(), price,
-                onSale && inStock));
+                onSale && inStock, stock));
     }
 }
