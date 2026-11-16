@@ -58,9 +58,9 @@
         </p>
     </div>
 
-    <!-- ==================== 提交购买意向（必须登录，T2-16） ==================== -->
+    <!-- ==================== 立即下单（必须登录，T2-16 / B 起下单即扣库存） ==================== -->
     <div class="card">
-        <h2>提交购买意向</h2>
+        <h2>立即下单</h2>
 
         <!-- 已登录：直接下单 -->
         <form th:if="${loggedIn and view.tradable()}"
@@ -69,7 +69,7 @@
               class="form-narrow">
             <p class="muted">
                 下单身份为你的登录账号，姓名与电话自动取自注册资料。
-                提交后请等待卖家确认；成交与否的结果会出现在「我的订单」里。
+                <strong>提交即扣减库存</strong>并生成订单，进度可在「我的订单」查看，发货前可自行取消。
             </p>
             <div class="form-row">
                 <label for="tradeAddress">交易地点（必填）</label>
@@ -95,7 +95,7 @@
         <!-- 未登录：引导登录，带回跳地址 -->
         <div th:if="${!loggedIn and view.tradable()}">
             <p class="muted">
-                购买商品需要先注册并登录。浏览商品无需登录，提交购买意向时必须登录身份。
+                购买商品需要先注册并登录。浏览商品无需登录，下单时必须登录身份。
             </p>
             <a class="btn btn-primary" th:href="@{/buyer/login(redirect=${'/products/' + product.id})}">
                 登录后购买
@@ -104,7 +104,7 @@
 
         <!-- 不可下单：交易中 / 售罄 -->
         <div th:if="${!view.tradable()}">
-            <p class="frozen-tip" th:text="${view.statusTip()}">暂时无法提交意向</p>
+            <p class="frozen-tip" th:text="${view.statusTip()}">暂时无法下单</p>
             <a class="btn" th:href="@{/}">看看其他商品</a>
         </div>
     </div>

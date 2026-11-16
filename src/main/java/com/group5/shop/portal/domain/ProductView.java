@@ -24,7 +24,7 @@ public record ProductView(Product product,
                           boolean frozen,
                           boolean soldOut) {
 
-    /** 能否提交购买意向 */
+    /** 能否下单（B 起「提交意向」就是下单，前端不再区分两个概念） */
     public boolean tradable() {
         return !frozen && !soldOut;
     }
@@ -32,7 +32,7 @@ public record ProductView(Product product,
     /** 下单按钮旁的状态提示，正常在售时为空串 */
     public String statusTip() {
         if (frozen) {
-            return "该商品正在交易中，暂时无法提交意向";
+            return "该商品正在交易中，暂时无法下单";
         }
         if (soldOut) {
             return "该商品已售罄";

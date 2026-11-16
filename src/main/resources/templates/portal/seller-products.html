@@ -12,8 +12,8 @@
 
     <h2>交易与意向</h2>
     <p class="muted">
-        按商品查看排队情况并确认交易。<strong>先到先得</strong>：只能从队首开始处理。
-        确认交易后商品进入「交易中」，其他买家暂时无法下单；标记成功会扣减 1 件库存。
+        按商品查看订单并推进状态。<strong>迭代 4 起不再有排队与位次</strong>：任何一条订单都可以直接处理，
+        不必从队首开始；买家下单时库存已经扣减，取消时自动回补。
     </p>
 
     <div class="card empty-tip" th:if="${products == null or products.isEmpty()}">
@@ -28,7 +28,7 @@
                 <th>商品</th>
                 <th>价格</th>
                 <th>状态</th>
-                <th>待处理意向</th>
+                <th>待处理订单</th>
                 <th>操作</th>
             </tr>
             </thead>
@@ -50,7 +50,7 @@
                     <span class="muted" th:if="${(counts.get(p.id) ?: 0) == 0}">无</span>
                 </td>
                 <td>
-                    <a class="btn btn-sm btn-primary" th:href="@{'/admin/intents/' + ${p.id}}">查看队列</a>
+                    <a class="btn btn-sm btn-primary" th:href="@{'/admin/intents/' + ${p.id}}">查看订单</a>
                 </td>
             </tr>
             </tbody>

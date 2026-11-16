@@ -274,7 +274,7 @@ class PortalFlowTest {
 
         // 交易中的商品不能 404——买家要能看到「还在，只是正在成交」，否则以为商品没了
         assertThat(html).contains("正在交易的显示器");
-        assertThat(html).contains("该商品正在交易中，暂时无法提交意向");
+        assertThat(html).contains("该商品正在交易中，暂时无法下单");
         assertThat(html).doesNotContain("/intents\"");
     }
 

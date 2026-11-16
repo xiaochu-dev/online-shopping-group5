@@ -87,7 +87,7 @@
                 <p class="product-desc" th:if="${p.description != null and !p.description.isEmpty()}"
                    th:text="${#strings.abbreviate(p.description, 60)}">商品描述</p>
                 <p class="muted" th:if="${p.description == null or p.description.isEmpty()}">卖家未填写商品描述</p>
-                <a class="btn btn-sm btn-primary" th:href="@{'/products/' + ${p.id}}">查看详情 · 提交购买意向</a>
+                <a class="btn btn-sm btn-primary" th:href="@{'/products/' + ${p.id}}">查看详情 · 立即下单</a>
             </div>
         </div>
     </div>

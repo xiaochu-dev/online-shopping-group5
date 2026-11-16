@@ -215,7 +215,7 @@ public class PortalService {
             throw new BusinessException(ErrorCode.NOT_FOUND, "商品不存在或已下架，无法提交意向");
         }
         if (ProductStatus.FROZEN.equals(product.getStatus())) {
-            throw new BusinessException(ErrorCode.PARAM_INVALID, "该商品正在交易中，暂时无法提交意向");
+            throw new BusinessException(ErrorCode.PARAM_INVALID, "该商品正在交易中，暂时无法下单");
         }
         if (!ProductStatus.ON_SALE.equals(product.getStatus())) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "商品不存在或已下架，无法提交意向");
