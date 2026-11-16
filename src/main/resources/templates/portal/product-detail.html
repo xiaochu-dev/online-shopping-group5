@@ -16,7 +16,7 @@
     <div class="card">
         <div class="product-row">
             <!-- 主图：图集第一张（多图未就绪时回落商品主图） -->
-            <img id="mainImage" class="thumb thumb-large" th:src="@{'/' + ${view.cover()}}" th:alt="${product.name}">
+            <img id="mainImage" width="180" height="180" fetchpriority="high" decoding="async" class="thumb thumb-large" th:src="@{'/' + ${view.cover()}}" th:alt="${product.name}">
             <div class="product-info" style="flex:1;">
                 <h2 style="margin-bottom:10px;" th:text="${product.name}">商品名称</h2>
                 <p>
@@ -40,11 +40,12 @@
             <p class="muted">商品图片（共 <b th:text="${view.images().size()}">1</b> 张）</p>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <img th:each="img : ${view.images()}"
-                     th:src="@{'/' + ${img}}"
+                     th:src="@{'/' + ${@productImages.small(img)}}"
+                     th:attr="data-full-src=@{'/' + ${img}}" loading="lazy" decoding="async" width="76" height="76"
                      th:alt="${product.name}"
                      class="thumb"
                      style="cursor:pointer;width:76px;height:76px;object-fit:cover;border-radius:6px;"
-                     onclick="document.getElementById('mainImage').src = this.src;">
+                     onclick="document.getElementById('mainImage').src = this.dataset.fullSrc;">
             </div>
         </div>
 

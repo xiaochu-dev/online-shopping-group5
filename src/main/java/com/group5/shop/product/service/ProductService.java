@@ -3,6 +3,7 @@ package com.group5.shop.product.service;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.group5.shop.product.domain.*;
 import com.group5.shop.product.util.RichTextSanitizer;
+import com.group5.shop.product.util.ProductImages;
 import com.group5.shop.common.exception.*;
 import com.group5.shop.common.util.MoneyUtils;
 import org.springframework.beans.factory.annotation.Value;
@@ -56,7 +57,7 @@ public class ProductService {
         }
         int cover=primary==null?0:primary;
         if(!files.isEmpty() && (cover<0 || cover>=files.size())) throw bad("主图序号无效");
-        List<byte[]> bytes=new ArrayList<>(); List<String> suffixes=new ArrayList<>();
+        List<byte[]> bytes=new ArrayList<>(), thumbnails=new ArrayList<>(); List<String> suffixes=new ArrayList<>();
         // 全部校验成功后才写文件，拒绝的请求不会留下半批上传。
         for(MultipartFile f:files) {
             if(f.isEmpty() || f.getSize()>5L*1024*1024) throw bad("图片不能为空且单张不能超过5MB");
@@ -74,7 +75,13 @@ public class ProductService {
                     var reader=readers.next();
                     try {
                         reader.setInput(input);
-                        if((long)reader.getWidth(0)*reader.getHeight(0)>40000000L || reader.read(0)==null) throw bad("图片尺寸过大或已损坏");
+                        if((long)reader.getWidth(0)*reader.getHeight(0)>40000000L) throw bad("图片尺寸过大或已损坏");
+                        var decoded=reader.read(0);
+                        if(decoded==null) throw bad("图片尺寸过大或已损坏");
+                        try {
+                            byte[] thumbnail=ProductImages.thumbnail(decoded);
+                            thumbnails.add(thumbnail.length<b.length?thumbnail:null);
+                        } finally { decoded.flush(); }
                     } finally { reader.dispose(); }
                 }
                 bytes.add(b); suffixes.add(png?".png":".jpg");
@@ -95,6 +102,11 @@ public class ProductService {
             for(int i=0;i<files.size();i++) {
                 String filename=UUID.randomUUID()+suffixes.get(i); Path path=uploads.resolve(filename);
                 written.add(path); Files.write(path,bytes.get(i),StandardOpenOption.CREATE_NEW); paths.add("uploads/"+filename);
+                if(thumbnails.get(i)!=null) {
+                    Files.createDirectories(uploads.resolve("thumbs"));
+                    Path thumbnail=uploads.resolve("thumbs").resolve(filename+".jpg");
+                    written.add(thumbnail); Files.write(thumbnail,thumbnails.get(i),StandardOpenOption.CREATE_NEW);
+                }
             }
         } catch(IOException e) { throw bad("图片保存失败"); }
         p.setImagePath(files.isEmpty()?"images/placeholder.png":paths.get(cover)); products.insert(p);

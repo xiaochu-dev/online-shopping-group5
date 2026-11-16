@@ -1,0 +1,72 @@
+{
+  "samples": [
+    {
+      "file": "keyboard-01.jpg",
+      "original_bytes": 63165,
+      "sha256": "55f0091eb87f8e582a2a62bf381dedc95626a4c0f8eea7d38b353a72acf5a3c5"
+    },
+    {
+      "file": "keyboard-02.jpg",
+      "original_bytes": 87619,
+      "sha256": "7eb4b5fcf1ff5d4176d385ff6bf512ef6e3aed9c296eb434d7dcc77b2a0961ca"
+    },
+    {
+      "file": "keyboard-03.jpg",
+      "original_bytes": 90105,
+      "sha256": "3359113949c335b41c85ab9af91acde46dcedf9ccd1b0058dc17401ed0e5bd43"
+    },
+    {
+      "file": "keyboard-04.jpg",
+      "original_bytes": 88049,
+      "sha256": "829cb348ea4a4509a665e0ee3654cb4c6450e076112a510f363ea12b4b7d9d58"
+    },
+    {
+      "file": "keyboard-05.jpg",
+      "original_bytes": 90111,
+      "sha256": "7c57b89722bcc98aa6fb1a3da6ba81a50479b19b7396cc948cf874e76a9665c6"
+    },
+    {
+      "file": "keyboard-06.jpg",
+      "original_bytes": 86075,
+      "sha256": "5723a47c943db61c96e1db653ddf77772ff10de416c2e1b04e1bc062c6e1a328"
+    },
+    {
+      "file": "keyboard-07.jpg",
+      "original_bytes": 85666,
+      "sha256": "2a359844359727c2ba768001903724e777fe7b5db3e406de8b141a77c52f57ea"
+    },
+    {
+      "file": "keyboard-08.jpg",
+      "original_bytes": 62329,
+      "sha256": "b82e57e72e4465137e1bff20471f2b745b5a37f4f9e7e77594c2a762f0b095be"
+    },
+    {
+      "file": "keyboard-09.jpg",
+      "original_bytes": 86571,
+      "sha256": "8e7253f2a87c93a9b50a0331a1c687f8a3c3b6c26cbaf188a90dea7eb81a5399"
+    }
+  ],
+  "warmup_uploads": 3,
+  "measured_uploads": 12,
+  "upload_ms": [
+    1845.3327,
+    1839.4329,
+    1807.2862,
+    1857.8685,
+    1907.1373,
+    1833.8256,
+    1853.6238,
+    1966.4182,
+    1879.6014,
+    1850.1318,
+    1848.5378,
+    1837.6558
+  ],
+  "upload_median_ms": 1849.3348,
+  "upload_p95_ms": 1966.4182,
+  "list_cover_count": 12,
+  "list_all_cover_http_payload_bytes": 178860,
+  "detail_all_image_http_payload_bytes": 213199,
+  "stored_image_bytes_for_15_products": 13345860,
+  "list_lazy_count": 11
+}

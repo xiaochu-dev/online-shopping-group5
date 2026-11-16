@@ -33,10 +33,10 @@
             </tr>
             </thead>
             <tbody>
-            <tr th:each="p : ${products}">
+            <tr th:each="p, imageStat : ${products}">
                 <td>
                     <div class="product-row" style="gap:10px;">
-                        <img class="thumb" th:src="@{'/' + ${p.imagePath}}" th:alt="${p.name}">
+                        <img decoding="async" width="120" height="120" th:attr="loading=${imageStat.first ? 'eager' : 'lazy'}" class="thumb" th:src="@{'/' + ${@productImages.small(p.imagePath)}}" th:alt="${p.name}">
                         <span th:text="${p.name}">商品名</span>
                     </div>
                 </td>
