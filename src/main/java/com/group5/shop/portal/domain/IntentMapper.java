@@ -1,97 +1,115 @@
 package com.group5.shop.portal.domain;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.group5.shop.portal.domain.Intent;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
-import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
+import java.util.Map;
 
 /**
- * 购买意向 Mapper（T2-06 建立；T2-16 ~ T2-18 扩展）。
+ * 订单头 Mapper（T2-06 建立；T4-01 / T4-03 改为五态口径）。
  *
- * <p>intent 表的 owner 是买家门户与交易模块（周到），本接口的所有改动都应以
+ * <p>{@code intent} 表的 owner 是订单域（周到），本接口的所有改动都以
  * {@code schema/03-intent.sql} 为准。</p>
  *
- * <p>队列排序规则与迭代 1 一致：<b>{@code ORDER BY created_at ASC, id ASC}</b>。
- * 主键取提交时间（毫秒），同一毫秒内的并发提交用自增 id 兜底，
- * 保证「先提交的排前面」这一语义在毫秒级并发下依然成立（NFR-03）。</p>
+ * <h2>迭代 4 的口径变化</h2>
+ * <ul>
+ *   <li><b>队列查询整体删除</b>：没有 {@code selectQueue}（待处理队列）了，
+ *       取而代之的是「某商品的全部订单 + 按状态筛选」；</li>
+ *   <li><b>「未结束」= created / confirmed / prepared / shipped</b>；
+ *       「已结束」= completed / cancelled；</li>
+ *   <li><b>状态写入不在这里</b>：除了「按口令码作废存量单」这条基线兜底，
+ *       所有状态变更走 {@code OrderStatusService}，避免规则散落到 SQL 里。</li>
+ * </ul>
  *
- * <p>队列位次<b>不落库</b>：不存 position 字段，位次由查询时的行号天然算出。
- * 这样一条意向结束或被撤销，后面的人自动前移，不需要批量 UPDATE。</p>
- *
- * @author 胡成溯（组长）建立；周到扩展 T2-16 ~ T2-18
+ * @author 胡成溯（组长）建立；周到扩展 T2-16 ~ T2-18、T4-01 ~ T4-04
  */
 @Mapper
 public interface IntentMapper extends BaseMapper<Intent> {
 
     /** 全部字段，避免新增列后各处 SELECT 列表不同步 */
-    String COLUMNS = "id, product_id, buyer_id, buyer_name, phone, trade_address, "
-            + "token_code, status, trade_result, fail_reason, created_at, finished_at";
+    String COLUMNS = "id, order_no, product_id, buyer_id, buyer_name, phone, trade_address, "
+            + "token_code, status, cancelled_by, cancelled_at, trade_result, fail_reason, "
+            + "created_at, finished_at";
+
+    /** 未结束（进行中）的状态集合，直接拼进 SQL，避免各处抄错 */
+    String ACTIVE_STATUSES = "('created', 'confirmed', 'prepared', 'shipped')";
+
+    /** 已结束（终局）的状态集合 */
+    String FINISHED_STATUSES = "('completed', 'cancelled')";
 
     /**
-     * 某商品排队中的意向（卖家意向管理页的队列区）。
+     * 某商品的订单列表，可按状态筛选（T4-04 卖家页）。
      *
      * @param productId 商品 id
-     * @return 按提交时间正序；无数据返回空列表
+     * @param status    状态值；null / 空串表示不筛选
+     * @return 按下单时间倒序；无数据返回空列表
      */
     @Select("SELECT " + COLUMNS + " FROM intent "
-            + "WHERE product_id = #{productId} AND status = 'pending' "
-            + "ORDER BY created_at ASC, id ASC")
-    List<Intent> selectQueue(@Param("productId") Long productId);
+            + "WHERE product_id = #{productId} "
+            + "AND (#{status} IS NULL OR #{status} = '' OR status = #{status}) "
+            + "ORDER BY created_at DESC, id DESC")
+    List<Intent> selectByProduct(@Param("productId") Long productId,
+                                 @Param("status") String status);
 
     /**
-     * 某商品所有<b>未结束</b>的意向（排队中 + 交易中）。
+     * 某商品<b>未结束</b>的订单（created / confirmed / prepared / shipped）。
      *
-     * <p>T2-18 的页面需要把「正在交易的那一笔」和后面排队的人放在同一屏，
-     * 否则卖家看不到自己正在处理谁。</p>
+     * <p>商品域用它判断「这个商品还有没有在途订单」（如库存调 0 前的保护）。</p>
      *
      * @param productId 商品 id
-     * @return 按提交时间正序
+     * @return 按下单时间正序
      */
     @Select("SELECT " + COLUMNS + " FROM intent "
-            + "WHERE product_id = #{productId} AND status IN ('pending', 'trading') "
+            + "WHERE product_id = #{productId} AND status IN " + ACTIVE_STATUSES + " "
             + "ORDER BY created_at ASC, id ASC")
-    List<Intent> selectActiveQueue(@Param("productId") Long productId);
+    List<Intent> selectActiveByProduct(@Param("productId") Long productId);
 
     /**
-     * 按口令码查意向（基线兜底：存量单仍可凭码撤销）。
+     * 某商品的订单数按状态分组（筛选标签计数）。
+     *
+     * @param productId 商品 id
+     * @return 每行含 {@code status} 与 {@code cnt}
+     */
+    @Select("SELECT status, COUNT(*) AS cnt FROM intent "
+            + "WHERE product_id = #{productId} GROUP BY status")
+    List<Map<String, Object>> countByProductGroupByStatus(@Param("productId") Long productId);
+
+    /**
+     * 按口令码查订单（基线兜底：存量单仍可凭码撤销）。
      *
      * @param tokenCode 口令码
-     * @return 意向；不存在返回 null
+     * @return 订单；不存在返回 null
      */
     @Select("SELECT " + COLUMNS + " FROM intent WHERE token_code = #{tokenCode} LIMIT 1")
     Intent selectByTokenCode(@Param("tokenCode") String tokenCode);
 
     /**
-     * 统计某买家在某商品上<b>未结束</b>的意向数（T2-16 的重复提交限制）。
+     * 统计某买家在某商品上<b>未结束</b>的订单数。
      *
-     * <p>库层还有部分唯一索引 {@code uq_intent_buyer_active} 兜底，
-     * 这里的查询用于给出友好提示，索引负责拦住并发穿透。</p>
+     * <p>迭代 1~3 用这条查询 + 部分唯一索引实现「一人一商品只能有一条未结束意向」；
+     * B 取消了该约束（允许多件下单与复购），此处只保留查询供业务侧给友好提示。</p>
      *
      * @param buyerId   买家 id
      * @param productId 商品 id
      * @return 条数
      */
     @Select("SELECT COUNT(*) FROM intent WHERE buyer_id = #{buyerId} AND product_id = #{productId} "
-            + "AND status IN ('pending', 'trading')")
+            + "AND status IN " + ACTIVE_STATUSES)
     int countActiveByBuyer(@Param("buyerId") Long buyerId, @Param("productId") Long productId);
 
     /**
-     * 某买家<b>已结束</b>的订单（T2-17 我的订单）。
-     *
-     * <p>只取 success / failed：排队中、交易中的单还没出结果，不属于「历史」，
-     * 也不进这个列表（澄清结论）。按交易时间倒序，交易时间相同用 id 兜底保证稳定。</p>
+     * 某买家<b>已结束</b>的订单（我的订单 · 已结束区块）。
      *
      * @param buyerId 买家 id
      * @param offset  偏移量
      * @param limit   每页条数
-     * @return 订单列表
+     * @return 按结束时间倒序
      */
     @Select("SELECT " + COLUMNS + " FROM intent "
-            + "WHERE buyer_id = #{buyerId} AND status IN ('success', 'failed') "
+            + "WHERE buyer_id = #{buyerId} AND status IN " + FINISHED_STATUSES + " "
             + "ORDER BY finished_at DESC, id DESC LIMIT #{limit} OFFSET #{offset}")
     List<Intent> selectFinishedByBuyer(@Param("buyerId") Long buyerId,
                                        @Param("offset") long offset,
@@ -104,82 +122,38 @@ public interface IntentMapper extends BaseMapper<Intent> {
      * @return 条数
      */
     @Select("SELECT COUNT(*) FROM intent WHERE buyer_id = #{buyerId} "
-            + "AND status IN ('success', 'failed')")
+            + "AND status IN " + FINISHED_STATUSES)
     long countFinishedByBuyer(@Param("buyerId") Long buyerId);
 
     /**
-     * 某买家<b>进行中</b>的意向（迭代 3 新增：排队中 + 交易中）。
+     * 某买家<b>进行中</b>的订单（我的订单 · 进行中区块）。
      *
-     * <p>补上「提交后查不到自己意向」的缺口：原设计只让客户看到已出结果的单，
-     * 客户提交后进入黑箱，既看不到进度也无法反悔。本方法供「我的订单」的
-     * 「进行中」区块使用，按提交时间正序（先提交的在上，与队列顺序一致）。</p>
+     * <p>B 要求「客户在发货前可以取消」，所以进行中的单必须对客户可见——
+     * 这与迭代 2「只展示已有结果」的口径正好相反。</p>
      *
      * @param buyerId 买家 id
-     * @return 进行中的意向；无则返回空列表
+     * @return 按下单时间正序
      */
     @Select("SELECT " + COLUMNS + " FROM intent "
-            + "WHERE buyer_id = #{buyerId} AND status IN ('pending', 'trading') "
+            + "WHERE buyer_id = #{buyerId} AND status IN " + ACTIVE_STATUSES + " "
             + "ORDER BY created_at ASC, id ASC")
     List<Intent> selectActiveByBuyer(@Param("buyerId") Long buyerId);
 
     /**
-     * 买家撤销自己的意向（迭代 3 新增）。
-     *
-     * <p><b>三个条件缺一不可，这是安全底线</b>：</p>
-     * <ul>
-     *   <li>{@code buyer_id = #{buyerId}}：只能撤销<b>自己的</b>单，防越权；</li>
-     *   <li>{@code status = 'pending'}：只有排队中的能撤销，交易中/已成交/已失败都不行；</li>
-     *   <li>{@code id = #{id}}：定位到具体单据。</li>
-     * </ul>
-     *
-     * <p>撤销<b>不写 finished_at</b>：这个字段语义是「交易发生的时间」，撤销没有交易发生。
-     * 撤销后该单 status 变为 cancelled，因队列查询只取 pending，后面的人自然前移，
-     * 不需要批量 UPDATE 位次（与队列位次不落库的设计一致）。</p>
-     *
-     * @param id      意向 id
-     * @param buyerId 当前登录买家 id
-     * @return 受影响行数：1 = 撤销成功；0 = 不存在、不属于本人、或状态不可撤销
-     */
-    @Update("UPDATE intent SET status = 'cancelled' "
-            + "WHERE id = #{id} AND buyer_id = #{buyerId} AND status = 'pending'")
-    int cancelByIdAndBuyer(@Param("id") Long id, @Param("buyerId") Long buyerId);
-
-    /**
-     * 按商品统计未结束意向数（卖家「我的商品」列表上显示队列长度）。
-     *
-     * <p>一次分组查询代替「每个商品查一次」，避免列表页 N+1。</p>
+     * 按商品统计未结束订单数（卖家「我的商品」列表上的角标）。
      *
      * @return 每行含 {@code product_id} 与 {@code cnt}
      */
     @Select("SELECT product_id, COUNT(*) AS cnt FROM intent "
-            + "WHERE status IN ('pending', 'trading') GROUP BY product_id")
-    List<java.util.Map<String, Object>> countActiveGroupByProduct();
+            + "WHERE status IN " + ACTIVE_STATUSES + " GROUP BY product_id")
+    List<Map<String, Object>> countActiveGroupByProduct();
 
     /**
-     * 按状态统计意向数。
+     * 按状态统计订单数（后台首页与自检用）。
      *
      * @param status 见 {@link com.group5.shop.common.constant.IntentStatus}
      * @return 条数
      */
     @Select("SELECT COUNT(*) FROM intent WHERE status = #{status}")
     long countByStatus(@Param("status") String status);
-
-    /**
-     * 库存归零后，把某商品剩余排队中的意向<b>批量置失败</b>（A.1.4）。
-     *
-     * <p>库存为 0 意味着后面排队的人永远不会被确认成交，让他们继续挂着
-     * 只会制造「排了一天结果什么也没有」的体验。订单本身没有扣过库存，
-     * 所以这里不涉及任何回滚，只需把状态与原因写清楚。</p>
-     *
-     * @param productId 商品 id
-     * @param reason    失败原因（写入 fail_reason，供「我的订单」展示）
-     * @param now       结束时间（毫秒）
-     * @return 受影响条数
-     */
-    @Update("UPDATE intent SET status = 'failed', trade_result = 'failed', "
-            + "fail_reason = #{reason}, finished_at = #{now} "
-            + "WHERE product_id = #{productId} AND status = 'pending'")
-    int failPendingOfProduct(@Param("productId") Long productId,
-                             @Param("reason") String reason,
-                             @Param("now") Long now);
 }

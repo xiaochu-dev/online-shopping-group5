@@ -172,9 +172,14 @@ public class PortalService {
         return new ProductView(product, images, stock, frozen, soldOut);
     }
 
-    /** 取商品当前排队人数（页面显示「已有 N 人排队」，队列长度即 pending 意向数） */
-    public int queueSize(Long productId) {
-        return intentMapper.selectQueue(productId).size();
+    /**
+     * 某商品当前<b>进行中的订单数</b>（页面显示「当前有 N 张进行中订单」）。
+     *
+     * <p>迭代 4 起没有排队概念：B 的订单是下单即扣库存、按状态推进，
+     * 所以这里数的是「还没走到终局的订单」，不是排队位次。</p>
+     */
+    public int activeOrderCount(Long productId) {
+        return intentMapper.selectActiveByProduct(productId).size();
     }
 
     // ==================================================================
@@ -232,7 +237,7 @@ public class PortalService {
         intent.setTradeAddress(address);
         // 主路径不生成口令码（基线验收物仍可凭存量码撤销）
         intent.setTokenCode(null);
-        intent.setStatus(IntentStatus.PENDING);
+        intent.setStatus(IntentStatus.CREATED);
         intent.setCreatedAt(TimeUtils.nowMillis());
         intentMapper.insert(intent);
         return intent;
@@ -257,15 +262,18 @@ public class PortalService {
             return false;
         }
         Intent intent = intentMapper.selectByTokenCode(tokenCode.trim());
-        if (intent == null || !IntentStatus.cancellable(intent.getStatus())) {
+        // B 的关闸口径：客户只能在开始发货之前取消（存量 pending 视同 created，仍可取消）
+        if (intent == null || !IntentStatus.canBuyerCancel(IntentStatus.fromLegacy(intent.getStatus()))) {
             return false;
         }
 
-        // 队列位次不落库：把状态改为 cancelled，后面排队的意向查询时自然前移
+        long now = TimeUtils.nowMillis();
         Intent patch = new Intent();
         patch.setId(intent.getId());
         patch.setStatus(IntentStatus.CANCELLED);
-        patch.setFinishedAt(TimeUtils.nowMillis());
+        patch.setCancelledBy(IntentStatus.CANCELLED_BY_BUYER);
+        patch.setCancelledAt(now);
+        patch.setFinishedAt(now);
         intentMapper.updateById(patch);
         return true;
     }

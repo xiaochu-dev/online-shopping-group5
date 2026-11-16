@@ -29,8 +29,8 @@
                     可售库存：<b th:text="${view.stock()}">0</b> 件
                 </p>
                 <p class="muted">
-                    当前有 <b th:text="${queueSize}">0</b> 人在排队。
-                    本系统按<strong>提交时间先到先得</strong>，越早提交排得越前。
+                    当前有 <b th:text="${activeOrderCount}">0</b> 张进行中的订单。
+                    订单会按「下单 → 商家确认 → 备货 → 发货 → 完成」推进，发货前可取消。
                 </p>
             </div>
         </div>
@@ -77,11 +77,11 @@
                        maxlength="100"
                        placeholder="例如：三食堂门口 / 西门快递柜；留空则使用注册资料里的默认交易地点">
             </div>
-            <button type="submit" class="btn btn-primary btn-block">提交意向，进入排队</button>
+            <button type="submit" class="btn btn-primary btn-block">提交订单</button>
         </form>
 
         <!-- 挑战需求 B.2.2：加入购物车（cart 模块，胡成溯）。
-             与「提交意向」并存：意向是单人排队买一件，购物车是多件合并下单，两条路都保留 -->
+             与「单件下单」并存：单件直接下单一件，购物车可多件合并下单，两条路都保留 -->
         <form th:if="${loggedIn and view.tradable()}"
               method="post" th:action="@{/cart/add}" class="form-narrow" style="margin-top:14px;">
             <input type="hidden" name="productId" th:value="${product.id}">

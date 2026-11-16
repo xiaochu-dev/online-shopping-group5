@@ -1,8 +1,10 @@
 package com.group5.shop.portal.controller;
 
+import com.group5.shop.common.constant.IntentStatus;
 import com.group5.shop.common.exception.BusinessException;
 import com.group5.shop.portal.contract.SellerContext;
-import com.group5.shop.portal.domain.QueueRow;
+import com.group5.shop.portal.domain.Intent;
+import com.group5.shop.portal.service.OrderStatusService;
 import com.group5.shop.portal.service.SellerIntentService;
 import com.group5.shop.product.domain.Product;
 import org.springframework.stereotype.Controller;
@@ -16,36 +18,42 @@ import org.springframework.web.util.UriUtils;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
- * 卖家交易确认与意向管理（T2-18）。
+ * 卖家订单管理（T2-18 起；T4-03 / T4-04 改为五态）。
  *
- * <p><b>路径为什么在 {@code /admin/} 下</b>：这一页的操作者是卖家，鉴权来自账号模块。
- * 挂在 {@code /admin/**} 下可以直接复用已有的登录拦截器（{@code LoginInterceptor}），
- * 不必为它再写一套权限判断。代码包仍留在 {@code portal/}，因为 intent 表归门户模块，
- * 真正被修改的是意向状态机。</p>
+ * <p><b>路径为什么在 {@code /admin/} 下</b>：操作者是卖家，鉴权来自账号模块，
+ * 挂在 {@code /admin/**} 下可直接复用登录拦截器。代码包仍留在 {@code portal/}，
+ * 因为 {@code intent} 表归订单域。</p>
  *
  * <table border="1">
  *   <caption>路由</caption>
  *   <tr><th>方法</th><th>路径</th><th>功能</th></tr>
- *   <tr><td>GET</td><td>/admin/intents</td><td>我的商品列表（含待处理意向数）</td></tr>
- *   <tr><td>GET</td><td>/admin/intents/{productId}</td><td>某商品的意向队列</td></tr>
- *   <tr><td>POST</td><td>/admin/intents/{intentId}/confirm</td><td>确认交易（冻结商品）</td></tr>
- *   <tr><td>POST</td><td>/admin/intents/{intentId}/success</td><td>交易成功（扣 1 件）</td></tr>
- *   <tr><td>POST</td><td>/admin/intents/{intentId}/fail</td><td>交易失败（作废 / 塞回队尾）</td></tr>
+ *   <tr><td>GET</td><td>/admin/intents</td><td>我的商品列表（含未完成订单数）</td></tr>
+ *   <tr><td>GET</td><td>/admin/intents/{productId}?status=</td><td>某商品的订单，可按五态筛选</td></tr>
+ *   <tr><td>POST</td><td>/admin/intents/{intentId}/advance</td><td>推进一步（确认 → 备货 → 发货 → 完成）</td></tr>
+ *   <tr><td>POST</td><td>/admin/intents/{intentId}/cancel</td><td>商家取消（交易完成前）</td></tr>
  * </table>
  *
- * @author 周到
+ * <p>迭代 3 的 {@code /confirm}、{@code /success}、{@code /fail}（含「塞回队尾」）三个
+ * 动作随队列机制一起下线：B 里商家是「一次一步往前走」，取消是独立终局，
+ * 没有「失败后塞回队尾」这种操作。</p>
+ *
+ * @author 周到（迭代 4 · T4-04）
  */
 @Controller
 public class SellerIntentController {
 
     private final SellerIntentService sellerIntentService;
+    private final OrderStatusService orderStatusService;
     private final SellerContext sellerContext;
 
     public SellerIntentController(SellerIntentService sellerIntentService,
+                                  OrderStatusService orderStatusService,
                                   SellerContext sellerContext) {
         this.sellerIntentService = sellerIntentService;
+        this.orderStatusService = orderStatusService;
         this.sellerContext = sellerContext;
     }
 
@@ -53,7 +61,7 @@ public class SellerIntentController {
     // 商品列表
     // ==================================================================
 
-    /** 我的商品：本迭代无删除功能，卖完的商品会留着，所以必须显示状态与待处理数 */
+    /** 我的商品：显示状态与未完成订单数 */
     @GetMapping("/admin/intents")
     public String productList(@RequestParam(value = "msg", required = false) String msg,
                               @RequestParam(value = "error", required = false) String error,
@@ -71,20 +79,24 @@ public class SellerIntentController {
     }
 
     // ==================================================================
-    // 某商品的队列
+    // 某商品的订单列表
     // ==================================================================
 
     @GetMapping("/admin/intents/{productId}")
-    public String queue(@PathVariable("productId") Long productId,
-                        @RequestParam(value = "msg", required = false) String msg,
-                        @RequestParam(value = "error", required = false) String error,
-                        Model model) {
+    public String orders(@PathVariable("productId") Long productId,
+                         @RequestParam(value = "status", required = false) String status,
+                         @RequestParam(value = "msg", required = false) String msg,
+                         @RequestParam(value = "error", required = false) String error,
+                         Model model) {
         Long sellerId = sellerContext.currentId();
         Product product = sellerIntentService.requireOwnedProduct(productId, sellerId);
-        List<QueueRow> queue = sellerIntentService.queueOf(productId);
+        String filter = normalizeStatus(status);
+        List<Intent> orders = sellerIntentService.ordersOfProduct(productId, filter);
 
         model.addAttribute("product", product);
-        model.addAttribute("queue", queue);
+        model.addAttribute("orders", orders);
+        model.addAttribute("statusFilter", filter);
+        model.addAttribute("statusCounts", sellerIntentService.statusCounts(productId));
         model.addAttribute("msg", msg);
         model.addAttribute("error", error);
         model.addAttribute("sellerName", sellerContext.currentName());
@@ -92,38 +104,30 @@ public class SellerIntentController {
     }
 
     // ==================================================================
-    // 三个动作
+    // 两个动作
     // ==================================================================
 
-    /** 确认交易：队首 → 交易中，商品冻结 */
-    @PostMapping("/admin/intents/{intentId}/confirm")
-    public String confirm(@PathVariable("intentId") Long intentId) {
-        return act(intentId, () -> sellerIntentService.confirmTrade(intentId),
-                "已确认交易，商品进入「交易中」，其他买家暂时无法下单");
-    }
-
-    /** 交易成功：扣 1 件库存，订单置成功，商品解冻回在售 */
-    @PostMapping("/admin/intents/{intentId}/success")
-    public String success(@PathVariable("intentId") Long intentId) {
-        return act(intentId, () -> sellerIntentService.markSuccess(intentId),
-                "已标记交易成功，库存扣减 1 件");
+    /** 推进一步：created → confirmed → prepared → shipped → completed */
+    @PostMapping("/admin/intents/{intentId}/advance")
+    public String advance(@PathVariable("intentId") Long intentId) {
+        Long sellerId = sellerContext.currentId();
+        Long productId = sellerIntentService.productIdOf(intentId);
+        return act(productId, () -> orderStatusService.advance(intentId, sellerId),
+                "ok", "已推进到「%s」");
     }
 
     /**
-     * 交易失败：库存不动，商品解冻回在售，并对该买家二选一。
+     * 商家取消：交易完成之前都可以（含已发货）。
      *
-     * @param requeue true = 塞回队尾；false / 不传 = 作废
-     * @param reason  失败原因，可空
+     * @param reason 取消原因，可空
      */
-    @PostMapping("/admin/intents/{intentId}/fail")
-    public String fail(@PathVariable("intentId") Long intentId,
-                       @RequestParam(value = "requeue", required = false) Boolean requeue,
-                       @RequestParam(value = "reason", required = false) String reason) {
-        boolean back = Boolean.TRUE.equals(requeue);
-        String done = back
-                ? "已标记交易失败，该买家已塞回队尾重新排队"
-                : "已标记交易失败并作废该买家的意向";
-        return act(intentId, () -> sellerIntentService.markFailed(intentId, back, reason), done);
+    @PostMapping("/admin/intents/{intentId}/cancel")
+    public String cancel(@PathVariable("intentId") Long intentId,
+                         @RequestParam(value = "reason", required = false) String reason) {
+        Long sellerId = sellerContext.currentId();
+        Long productId = sellerIntentService.productIdOf(intentId);
+        return act(productId, () -> orderStatusService.cancelBySeller(intentId, sellerId, reason),
+                "已取消该订单，库存已回补", null);
     }
 
     // ==================================================================
@@ -131,26 +135,54 @@ public class SellerIntentController {
     // ==================================================================
 
     /**
-     * 统一处理「执行动作 → 303 回该商品的队列页」。
+     * 统一处理「执行动作 → 303 回该商品的订单页」。
      *
-     * <p>失败也回队列页并在 {@code error} 里说明原因，不抛到错误页——
-     * 卖家最常见的失败是「跳着确认队首」和「商品已在交易中」，这两种都应就地提示、就地重试。</p>
+     * <p>失败也回列表并在 {@code error} 里说明原因，不抛到错误页——
+     * 卖家最常见的失败是「状态已被改过」和「越权操作别人的单」，这两种都应就地提示。</p>
+     *
+     * <p>{@code messageTemplate} 含 {@code %s} 时用动作后的状态中文名填充。</p>
      */
-    private String act(Long intentId, Runnable action, String successMessage) {
-        Long productId = sellerIntentService.productIdOf(intentId);
+    private String act(Long productId, Supplier<Intent> action, String successMessage,
+                       String messageTemplate) {
+        Intent after;
         try {
-            action.run();
+            after = action.get();
         } catch (BusinessException e) {
-            return backTo(productId, "error", e.getMessage());
+            return backTo(productId, null, "error", e.getMessage());
         }
-        return backTo(productId, "msg", successMessage);
+        String message = messageTemplate == null
+                ? successMessage
+                : String.format(messageTemplate, IntentStatus.labelOf(after.getStatus()));
+        return backTo(productId, null, "msg", message);
     }
 
-    private String backTo(Long productId, String key, String text) {
-        String suffix = "?" + key + "=" + encode(text);
-        return productId == null
-                ? "redirect:/admin/intents" + suffix
-                : "redirect:/admin/intents/" + productId + suffix;
+    private String backTo(Long productId, String status, String key, String text) {
+        StringBuilder url = new StringBuilder("redirect:/admin/intents");
+        if (productId != null) {
+            url.append('/').append(productId);
+        }
+        StringBuilder query = new StringBuilder();
+        if (status != null && !status.isEmpty()) {
+            query.append("status=").append(status);
+        }
+        if (query.length() > 0) {
+            query.append('&');
+        }
+        query.append(key).append('=').append(encode(text));
+        return url.append('?').append(query).toString();
+    }
+
+    /** 只接受五种流转态与 cancelled，其他值视为「不筛选」，避免把任意串拼进 SQL */
+    private String normalizeStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return null;
+        }
+        String value = status.trim();
+        return switch (value) {
+            case IntentStatus.CREATED, IntentStatus.CONFIRMED, IntentStatus.PREPARED,
+                 IntentStatus.SHIPPED, IntentStatus.COMPLETED, IntentStatus.CANCELLED -> value;
+            default -> null;
+        };
     }
 
     private String encode(String text) {

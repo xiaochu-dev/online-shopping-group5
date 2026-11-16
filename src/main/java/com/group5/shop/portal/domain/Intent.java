@@ -33,6 +33,10 @@ public class Intent {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    /** 订单号，如 {@code SO202611160001}；迭代 1~3 的存量单为 null */
+    private String orderNo;
+
+    /** 首件商品 id：兼容「一次意向 = 1 件」的旧视图，完整明细见 {@link OrderLine} */
     private Long productId;
 
     /** 下单人；0 表示迭代 2 基线遗留的匿名单 */
@@ -50,8 +54,14 @@ public class Intent {
     /** 口令码：基线遗留，新单为 null，全局唯一（部分索引） */
     private String tokenCode;
 
-    /** pending / trading / success / failed / cancelled，见 {@link IntentStatus} */
+    /** created / confirmed / prepared / shipped / completed / cancelled，见 {@link IntentStatus} */
     private String status;
+
+    /** 谁取消的：{@code buyer} / {@code seller}；未取消为 null。客户取消与商家取消的文案不同 */
+    private String cancelledBy;
+
+    /** 取消时间，毫秒；未取消为 null */
+    private Long cancelledAt;
 
     /** 单据级交易结果：success / failed，未结束为 null */
     private String tradeResult;
@@ -74,9 +84,48 @@ public class Intent {
         return IntentStatus.labelOf(status);
     }
 
-    /** 供页面判断「撤销」按钮是否可点 */
+    /**
+     * 状态对应的标签样式类（五态各一色，已取消为灰）。
+     *
+     * <p>放在实体里而不是模板里写嵌套三元：Thymeleaf 的三元一嵌套就没法读，
+     * 而颜色规则以后要改（比如「已发货」换色），只该改一处。</p>
+     */
+    public String getStatusCss() {
+        if (status == null) {
+            return "tag-gray";
+        }
+        return switch (status) {
+            case IntentStatus.CREATED -> "tag-blue";
+            case IntentStatus.CONFIRMED, IntentStatus.PREPARED -> "tag-orange";
+            case IntentStatus.SHIPPED, IntentStatus.COMPLETED, IntentStatus.SUCCESS -> "tag-green";
+            case IntentStatus.CANCELLED, IntentStatus.FAILED -> "tag-gray";
+            default -> "tag-gray";
+        };
+    }
+
+    /** 供页面判断「撤销」按钮是否可点（迭代 4 起等同「客户能否取消」，B.1.2） */
     public boolean isCancellable() {
-        return IntentStatus.cancellable(status);
+        return IntentStatus.canBuyerCancel(status);
+    }
+
+    /** 页面用：客户此刻能否取消（B.1.2，发货前） */
+    public boolean isBuyerCancellable() {
+        return IntentStatus.canBuyerCancel(status);
+    }
+
+    /** 页面用：商家此刻能否取消（B.1.3，完成前） */
+    public boolean isSellerCancellable() {
+        return IntentStatus.canSellerCancel(status);
+    }
+
+    /** 页面用：是否「进行中」的单（我的订单分区用） */
+    public boolean isActiveOrder() {
+        return IntentStatus.isActive(status);
+    }
+
+    /** 页面用：取消文案「您已取消 / 商家已取消」；未取消为空串 */
+    public String getCancelText() {
+        return IntentStatus.cancelSideLabel(cancelledBy);
     }
 
     /** 下单时间，格式化为 {@code 2026-10-21 16:30} */
@@ -89,13 +138,18 @@ public class Intent {
         return TimeUtils.formatDateTime(finishedAt);
     }
 
-    /** 交易结果的中文名；未结束返回空串 */
+    /**
+     * 交易结果的中文名；未结束返回空串。
+     *
+     * <p>迭代 4 起结果由 {@link #status} 表达（completed / cancelled），
+     * 存量单仍是 {@code success / failed}，两种都要认。</p>
+     */
     public String getTradeResultLabel() {
-        if (IntentStatus.SUCCESS.equals(tradeResult)) {
-            return "交易成功";
+        if (IntentStatus.COMPLETED.equals(status) || IntentStatus.SUCCESS.equals(tradeResult)) {
+            return "交易完成";
         }
-        if (IntentStatus.FAILED.equals(tradeResult)) {
-            return "交易失败";
+        if (IntentStatus.CANCELLED.equals(status) || IntentStatus.FAILED.equals(tradeResult)) {
+            return "已取消";
         }
         return "";
     }
@@ -110,6 +164,30 @@ public class Intent {
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public String getOrderNo() {
+        return orderNo;
+    }
+
+    public void setOrderNo(String orderNo) {
+        this.orderNo = orderNo;
+    }
+
+    public String getCancelledBy() {
+        return cancelledBy;
+    }
+
+    public void setCancelledBy(String cancelledBy) {
+        this.cancelledBy = cancelledBy;
+    }
+
+    public Long getCancelledAt() {
+        return cancelledAt;
+    }
+
+    public void setCancelledAt(Long cancelledAt) {
+        this.cancelledAt = cancelledAt;
     }
 
     public Long getProductId() {

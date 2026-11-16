@@ -16,27 +16,34 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * {@code intent} 表迁移器（T2-16 / T2-17 / T2-18，owner：周到）。
+ * {@code intent} 表迁移器（T2-16 / T2-17 / T2-18 / T4-01，owner：周到）。
  *
- * <p>把迭代 2 基线的 {@code intent} 升级成挑战需求 A 需要的结构，脚本见
- * {@code classpath:schema/03-intent.sql}。</p>
+ * <p>脚本见 {@code classpath:schema/03-intent.sql}。三个版本的库都要能启动：</p>
  *
- * <h2>为什么需要这个类，而不是只靠 schema/03-intent.sql</h2>
+ * <table border="1">
+ *   <caption>版本判定</caption>
+ *   <tr><th>库的形状</th><th>判定依据</th><th>动作</th></tr>
+ *   <tr><td>迭代 2 基线</td><td>没有 {@code buyer_id}</td><td>整表重建，存量匿名意向不保留</td></tr>
+ *   <tr><td>迭代 3（挑战 A）</td><td>有 {@code buyer_id}、没有 {@code cancelled_by}</td>
+ *       <td><b>换形保留数据</b>：旧状态按映射表翻译成五态</td></tr>
+ *   <tr><td>迭代 4（挑战 B）</td><td>有 {@code cancelled_by}</td><td>跳过</td></tr>
+ * </table>
+ *
+ * <h2>为什么 B 的迁移不能像 A 那样「删了重建」</h2>
+ * <p>A 阶段可以清空，是因为存量的都是匿名意向、按澄清口径本就不并入任何客户。
+ * B 阶段库里是真实产生过的订单，删掉等于抹掉历史，所以要「建新表 → 拷数据（翻译状态）→ 换名」。
+ * SQLite 没有 {@code ALTER COLUMN}，改 CHECK 约束只能走这条路。</p>
+ *
+ * <h2>两个容易踩的 SQLite 坑</h2>
  * <ol>
- *   <li><b>建表脚本只能新建、改不了旧表</b>：{@code 03-intent.sql} 全是
- *       {@code CREATE ... IF NOT EXISTS}，对<b>已经存在</b>的旧库是空操作；
- *       老开发机上的 {@code intent} 还是「无 buyer_id、token_code NOT NULL」的形状，
- *       不处理就会在「下单不生成口令码」这一步写库失败；</li>
- *   <li><b>SQLite 改不了约束</b>：{@code token_code} 从 NOT NULL 改可空没有 ALTER 可用，
- *       只能重建整张表；</li>
- *   <li><b>表 owner 是模块，不是基座</b>：判定与迁移逻辑放在 intent 的 owner 包里，
- *       基座的 {@code schema/*.sql} 保持纯建表，别人不用关心我的表怎么演进。</li>
+ *   <li><b>改名前必须关外键</b>：{@code intent} 被 {@code order_item} 引用，
+ *       外键约束开着时 {@code DROP TABLE} 会失败；</li>
+ *   <li><b>改名前必须开 {@code legacy_alter_table}</b>：默认行为下重命名 {@code intent}
+ *       会连带把 {@code order_item} 里记录的外键名改成新名字，换名后明细就挂到一张不存在的表上。
+ *       老行为只改表名、不动别人对自己的引用，正好是这里需要的。</li>
  * </ol>
  *
- * <p><b>数据取舍</b>：重建会清空 intent。按《挑战需求A-澄清问答记录》，存量匿名意向
- * 不并入任何客户，清空即符合口径；商品与账号数据不受影响。</p>
- *
- * <p><b>幂等</b>：以 {@code buyer_id} 是否已存在作为「迁移过」的标记，
+ * <p><b>幂等</b>：以 {@code cancelled_by} 列是否存在作为「已是 B 结构」的标记，
  * 已迁移的库启动时只做一次 {@code PRAGMA} 探测，不写库。</p>
  *
  * @author 周到
@@ -47,12 +54,19 @@ public class IntentSchemaMigrator implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(IntentSchemaMigrator.class);
 
-    /** 迁移完成的标记列：它存在就说明整张表已是挑战需求 A 的结构 */
-    private static final String SENTINEL_TABLE = "intent";
-    private static final String SENTINEL_COLUMN = "buyer_id";
+    private static final String TABLE = "intent";
+
+    /** A 阶段的标记列 */
+    private static final String SENTINEL_A = "buyer_id";
+
+    /** B 阶段的标记列：它存在就说明已是五态结构 */
+    private static final String SENTINEL_B = "cancelled_by";
 
     /** 迁移脚本位置（与 00/01/02 同目录，编号即 owner 划分） */
     private static final String SCRIPT_LOCATION = "schema/03-intent.sql";
+
+    /** 换名期间的过渡表名 */
+    private static final String STAGING = "intent_a3";
 
     private final JdbcTemplate jdbc;
 
@@ -62,26 +76,88 @@ public class IntentSchemaMigrator implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        if (columnExists(SENTINEL_TABLE, SENTINEL_COLUMN)) {
-            log.debug("intent 表已是挑战需求 A 结构（{}.{} 存在），跳过迁移",
-                    SENTINEL_TABLE, SENTINEL_COLUMN);
+        if (!tableExists(TABLE)) {
+            log.warn("未找到 intent 表，跳过结构迁移；请确认 schema/03-intent.sql 已正确执行");
             return;
         }
-        if (!tableExists(SENTINEL_TABLE)) {
-            // 全新库：schema/03-intent.sql 还没来得及建表（不该发生），跳过并提示，避免启动即崩
-            log.warn("未找到 intent 表，跳过一次结构迁移；请确认 schema/03-intent.sql 已正确执行");
+        if (columnExists(TABLE, SENTINEL_B)) {
+            log.debug("intent 表已是挑战需求 B 结构（{}.{} 存在），跳过迁移", TABLE, SENTINEL_B);
             return;
         }
+        if (!columnExists(TABLE, SENTINEL_A)) {
+            rebuildFromBaseline();
+            return;
+        }
+        upgradeToFiveStates();
+    }
 
+    // ------------------------------------------------------------------
+    // 迭代 2 基线 → 当前结构（存量匿名意向不保留）
+    // ------------------------------------------------------------------
+
+    private void rebuildFromBaseline() {
         List<String> statements = readStatements();
-        log.info("开始迁移 intent 表：{} 条语句（重建表以放开 token_code 非空约束）", statements.size());
-        // 旧表结构与新 DDL 不兼容（缺列 + 多了 NOT NULL），整表重建；
-        // 旧数据是匿名意向，按澄清结论不保留
-        jdbc.execute("DROP TABLE IF EXISTS intent");
+        log.info("开始迁移 intent 表（基线）：{} 条语句，整表重建，存量匿名意向不保留", statements.size());
+        jdbc.execute("DROP TABLE IF EXISTS " + TABLE);
         for (String sql : statements) {
             jdbc.execute(sql);
         }
-        log.info("intent 表迁移完成：新增 buyer_id / trade_address / finished_at / trade_result / fail_reason");
+        log.info("intent 表迁移完成：新增 buyer_id / trade_address / finished_at / cancelled_by 等列");
+    }
+
+    // ------------------------------------------------------------------
+    // 迭代 3（挑战 A）→ 迭代 4（挑战 B）：换形 + 状态翻译 + 保留数据
+    // ------------------------------------------------------------------
+
+    private void upgradeToFiveStates() {
+        log.info("开始迁移 intent 表（A → B）：换形为五态订单头，保留订单数据");
+        jdbc.execute("PRAGMA foreign_keys = OFF");
+        jdbc.execute("PRAGMA legacy_alter_table = ON");
+        try {
+            jdbc.execute("DROP TABLE IF EXISTS " + STAGING);
+            jdbc.execute("ALTER TABLE " + TABLE + " RENAME TO " + STAGING);
+
+            // 重建新的 intent（脚本里是 CREATE TABLE IF NOT EXISTS，此刻表已改名，会真的建）
+            for (String sql : readStatements()) {
+                jdbc.execute(sql);
+            }
+
+            // 拷数据：状态按《挑战需求B-澄清问答记录》§五 的映射表翻译
+            jdbc.execute("""
+                    INSERT INTO intent (id, order_no, product_id, buyer_id, buyer_name, phone,
+                                        trade_address, token_code, status, cancelled_by, cancelled_at,
+                                        trade_result, fail_reason, created_at, finished_at)
+                    SELECT id,
+                           NULL,
+                           product_id,
+                           buyer_id,
+                           buyer_name,
+                           phone,
+                           trade_address,
+                           token_code,
+                           CASE status
+                               WHEN 'pending' THEN 'created'
+                               WHEN 'trading' THEN 'confirmed'
+                               WHEN 'success' THEN 'completed'
+                               WHEN 'failed'  THEN 'cancelled'
+                               ELSE status
+                           END,
+                           NULL,
+                           CASE WHEN status IN ('failed', 'cancelled', 'success', 'completed')
+                                THEN finished_at ELSE NULL END,
+                           trade_result,
+                           fail_reason,
+                           created_at,
+                           finished_at
+                    FROM """ + STAGING);
+
+            jdbc.execute("DROP TABLE " + STAGING);
+            log.info("intent 表迁移完成：pending→created、trading→confirmed、"
+                    + "success→completed、failed→cancelled");
+        } finally {
+            jdbc.execute("PRAGMA legacy_alter_table = OFF");
+            jdbc.execute("PRAGMA foreign_keys = ON");
+        }
     }
 
     // ------------------------------------------------------------------

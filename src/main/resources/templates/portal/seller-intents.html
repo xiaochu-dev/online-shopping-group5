@@ -1,7 +1,7 @@
 <!DOCTYPE html>
-<!-- 某商品的意向队列与交易确认 —— 买家门户与交易：周到（T2-18） -->
+<!-- 某商品的订单管理 —— 订单域：周到（T4-04，挑战需求 B.1） -->
 <html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{portal/fragments :: head('意向队列')}"></head>
+<head th:replace="~{portal/fragments :: head('订单管理')}"></head>
 <body>
 <div th:replace="~{portal/fragments :: adminTopbar('intents')}"></div>
 
@@ -22,72 +22,116 @@
                     <span class="price" th:text="'¥ ' + ${product.priceYuan}">¥ 0.00</span>
                     <span class="tag" th:classappend="${product.statusCss}" th:text="${product.statusLabel}">在售</span>
                 </p>
-                <p class="muted">
-                    队列共 <b th:text="${queue.size()}">0</b> 条未结束意向（含交易中）。
-                    <span th:if="${product.status == 'frozen'}" class="tag tag-orange">该商品正在交易中</span>
-                </p>
+                <p class="muted">共 <b th:text="${orders.size()}">0</b> 张订单（当前筛选）</p>
             </div>
         </div>
     </div>
 
-    <div class="card empty-tip" th:if="${queue.isEmpty()}">
-        <p>当前没有待处理的意向</p>
-        <p class="muted">买家提交意向后会出现在这里，按提交时间先后排列。</p>
+    <!-- 五态筛选：B.1.1「订单含 5 个状态，页面上能按状态筛选」 -->
+    <div class="card">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <a class="btn btn-sm"
+               th:classappend="${statusFilter == null} ? 'btn-primary' : ''"
+               th:href="@{'/admin/intents/' + ${product.id}}">全部</a>
+            <a class="btn btn-sm"
+               th:classappend="${statusFilter == 'created'} ? 'btn-primary' : ''"
+               th:href="@{'/admin/intents/' + ${product.id}(status='created')}">
+                客户下单 <span th:text="${statusCounts.get('created')} ?: 0">0</span>
+            </a>
+            <a class="btn btn-sm"
+               th:classappend="${statusFilter == 'confirmed'} ? 'btn-primary' : ''"
+               th:href="@{'/admin/intents/' + ${product.id}(status='confirmed')}">
+                商家确认 <span th:text="${statusCounts.get('confirmed')} ?: 0">0</span>
+            </a>
+            <a class="btn btn-sm"
+               th:classappend="${statusFilter == 'prepared'} ? 'btn-primary' : ''"
+               th:href="@{'/admin/intents/' + ${product.id}(status='prepared')}">
+                备货完成 <span th:text="${statusCounts.get('prepared')} ?: 0">0</span>
+            </a>
+            <a class="btn btn-sm"
+               th:classappend="${statusFilter == 'shipped'} ? 'btn-primary' : ''"
+               th:href="@{'/admin/intents/' + ${product.id}(status='shipped')}">
+                开始发货 <span th:text="${statusCounts.get('shipped')} ?: 0">0</span>
+            </a>
+            <a class="btn btn-sm"
+               th:classappend="${statusFilter == 'completed'} ? 'btn-primary' : ''"
+               th:href="@{'/admin/intents/' + ${product.id}(status='completed')}">
+                交易完成 <span th:text="${statusCounts.get('completed')} ?: 0">0</span>
+            </a>
+            <a class="btn btn-sm"
+               th:classappend="${statusFilter == 'cancelled'} ? 'btn-primary' : ''"
+               th:href="@{'/admin/intents/' + ${product.id}(status='cancelled')}">
+                已取消 <span th:text="${statusCounts.get('cancelled')} ?: 0">0</span>
+            </a>
+        </div>
     </div>
 
-    <!-- 队列 -->
-    <div class="card" th:if="${!queue.isEmpty()}">
+    <div class="card empty-tip" th:if="${orders.isEmpty()}">
+        <p>当前筛选下没有订单</p>
+        <p class="muted">客户下单后会出现在这里。B 起订单按「下单 → 确认 → 备货 → 发货 → 完成」逐步推进。</p>
+    </div>
+
+    <!-- 订单列表（队列机制随 B 退出） -->
+    <div class="card" th:if="${!orders.isEmpty()}">
         <table class="table">
             <thead>
             <tr>
-                <th>位次</th>
                 <th>买家</th>
                 <th>联系电话</th>
                 <th>交易地点</th>
                 <th>下单时间</th>
-                <th>状态</th>
+                <th>当前状态</th>
                 <th>操作</th>
             </tr>
             </thead>
             <tbody>
-            <tr th:each="row : ${queue}">
-                <td><span class="badge-lg" th:text="${row.position()}">1</span></td>
-                <td th:text="${row.intent().buyerName}">买家</td>
-                <td th:text="${row.intent().phone}">电话</td>
-                <td class="muted" th:text="${row.intent().tradeAddress} ?: '（未填）'">地点</td>
-                <td th:text="${row.intent().createdAtText}">2026-10-21 16:00</td>
+            <tr th:each="row : ${orders}">
+                <td th:text="${row.buyerName}">买家</td>
+                <td th:text="${row.phone}">电话</td>
+                <td class="muted" th:text="${row.tradeAddress} ?: '（未填）'">地点</td>
+                <td th:text="${row.createdAtText}">2026-11-16 10:00</td>
                 <td>
-                    <span class="tag" th:classappend="${row.trading()} ? 'tag-orange' : 'tag-blue'"
-                          th:text="${row.intent().statusLabel}">排队中</span>
+                    <span class="tag" th:classappend="${row.statusCss}"
+                          th:text="${row.statusLabel}">客户下单</span>
+                    <div class="muted" th:if="${row.status == 'cancelled'}"
+                         th:text="${row.cancelText}">您已取消</div>
                 </td>
                 <td>
-                    <!-- 排队中且是队首：确认交易 -->
-                    <form th:if="${row.head() and !row.trading()}"
-                          method="post"
-                          th:action="@{'/admin/intents/' + ${row.intent().id} + '/confirm'}"
-                          class="inline-form">
-                        <button type="submit" class="btn btn-sm btn-primary">确认交易</button>
-                    </form>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
 
-                    <!-- 非队首：只能等 -->
-                    <span class="muted" th:if="${!row.head() and !row.trading()}">等待前面的人处理</span>
+                        <!-- 商家推进一步：五态里每次只走一格 -->
+                        <form th:if="${row.status == 'created'}"
+                              method="post" th:action="@{'/admin/intents/' + ${row.id} + '/advance'}"
+                              class="inline-form">
+                            <button type="submit" class="btn btn-sm btn-primary">确认订单</button>
+                        </form>
+                        <form th:if="${row.status == 'confirmed'}"
+                              method="post" th:action="@{'/admin/intents/' + ${row.id} + '/advance'}"
+                              class="inline-form">
+                            <button type="submit" class="btn btn-sm btn-primary">备货完成</button>
+                        </form>
+                        <form th:if="${row.status == 'prepared'}"
+                              method="post" th:action="@{'/admin/intents/' + ${row.id} + '/advance'}"
+                              class="inline-form">
+                            <button type="submit" class="btn btn-sm btn-primary">开始发货</button>
+                        </form>
+                        <form th:if="${row.status == 'shipped'}"
+                              method="post" th:action="@{'/admin/intents/' + ${row.id} + '/advance'}"
+                              class="inline-form">
+                            <button type="submit" class="btn btn-sm btn-success">交易完成</button>
+                        </form>
 
-                    <!-- 交易中：成功 / 失败（作废）/ 失败（塞回队尾） -->
-                    <div th:if="${row.trading()}" style="display:flex;gap:6px;flex-wrap:wrap;">
-                        <form method="post"
-                              th:action="@{'/admin/intents/' + ${row.intent().id} + '/success'}"
-                              class="inline-form">
-                            <button type="submit" class="btn btn-sm btn-success">交易成功（扣 1 件）</button>
+                        <!-- 商家取消：交易完成之前都可以，含已发货 -->
+                        <form th:if="${row.isSellerCancellable()}"
+                              method="post" th:action="@{'/admin/intents/' + ${row.id} + '/cancel'}"
+                              class="inline-form"
+                              onsubmit="return confirm('确定取消这张订单吗？取消后库存会回补，且不可恢复。');">
+                            <input type="text" name="reason" placeholder="取消原因（可空）" style="min-width:130px;">
+                            <button type="submit" class="btn btn-sm btn-danger">取消订单</button>
                         </form>
-                        <form method="post"
-                              th:action="@{'/admin/intents/' + ${row.intent().id} + '/fail'}"
-                              class="inline-form">
-                            <input type="text" name="reason" placeholder="失败原因（可空）" style="min-width:150px;">
-                            <button type="submit" class="btn btn-sm btn-warning">失败 · 作废</button>
-                            <button type="submit" name="requeue" value="true" class="btn btn-sm btn-danger">
-                                失败 · 塞回队尾
-                            </button>
-                        </form>
+
+                        <span class="muted" th:if="${row.status == 'completed'}">已完成</span>
+                        <span class="muted" th:if="${row.status == 'cancelled'}">已取消</span>
                     </div>
                 </td>
             </tr>
@@ -96,8 +140,10 @@
     </div>
 
     <p class="muted">
-        说明：本系统没有单独的「取消」状态。你的「取消」就等于「交易失败」——
-        库存不动、商品立刻回到在售，后面排队的人接着按顺序走。
+        说明（B.1.2 / B.1.3）：
+        客户可在「客户下单 / 商家确认 / 备货完成」三态取消，<strong>开始发货后客户不可取消</strong>；
+        商家在<strong>交易完成之前</strong>都可取消（含已发货）。取消是独立的终局状态，
+        与「交易完成」平级，取消后不再有后续流转。取消会把该订单占用的库存按件回补。
     </p>
 
 </div>

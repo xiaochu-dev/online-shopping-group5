@@ -47,9 +47,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>覆盖一条完整链路：
  * <ol>
  *   <li><b>生成支付单</b>：打开支付页自动创建 pending 支付单，金额快照自商品价格（分）；</li>
- *   <li><b>模拟支付成功</b>：支付单 paid、订单自动 success、扣 1 件库存；</li>
- *   <li><b>订单完成</b>：{@code intent.tradeResult = success}、{@code finishedAt} 落库；</li>
- *   <li><b>退款</b>：支付单 refunded、订单回退 failed（原因「已退款」）。</li>
+ *   <li><b>模拟支付成功</b>：支付单 paid；<b>订单状态与库存都不动</b>（T4-07 切断回写）；</li>
+ *   <li><b>退款</b>：支付单 refunded；订单仍不动——订单是否结束由商家推进的状态机决定。</li>
  * </ol>
  * 另覆盖三条易错点：重复支付被拒、重复退款被拒、越权支付被拒。</p>
  *
@@ -144,7 +143,7 @@ class PaymentTest {
         return p.getId();
     }
 
-    /** 造一条 pending 意向，返回意向 id */
+    /** 造一条 created 订单，返回订单 id */
     private Long seedIntent(Long productId, Long buyerId) {
         Intent intent = new Intent();
         intent.setProductId(productId);
@@ -152,7 +151,7 @@ class PaymentTest {
         intent.setBuyerName("测试买家");
         intent.setPhone("13800000000");
         intent.setTradeAddress("图书馆门口");
-        intent.setStatus(IntentStatus.PENDING);
+        intent.setStatus(IntentStatus.CREATED);
         intent.setCreatedAt(System.currentTimeMillis());
         intentMapper.insert(intent);
         return intent.getId();
@@ -211,12 +210,12 @@ class PaymentTest {
     }
 
     // ==================================================================
-    // 二、模拟支付成功 → 订单完成
+    // 二、模拟支付成功 → 只记流水，不动订单
     // ==================================================================
 
     @Test
     @Order(4)
-    void 模拟支付成功后支付单已支付且订单自动完成() throws Exception {
+    void 模拟支付成功只改支付单不动订单状态() throws Exception {
         mockMvc.perform(post("/pay/" + intentId + "/pay"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrlPattern("/pay/" + intentId + "?msg=*"));
@@ -225,13 +224,13 @@ class PaymentTest {
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
         assertThat(payment.getPaidAt()).as("支付成功必须落支付时间").isNotNull();
 
+        // T4-07：B 里支付完全不参与订单状态机，也不扣库存（下单时已扣）
         Intent intent = intentMapper.selectById(intentId);
-        assertThat(intent.getStatus()).as("支付成功订单应自动完成").isEqualTo(IntentStatus.SUCCESS);
-        assertThat(intent.getTradeResult()).isEqualTo(IntentStatus.SUCCESS);
-        assertThat(intent.getFinishedAt()).as("交易时间必须落库").isNotNull();
+        assertThat(intent.getStatus()).as("支付不得改动订单状态").isEqualTo(IntentStatus.CREATED);
+        assertThat(intent.getFinishedAt()).as("支付不是订单结束，不能写结束时间").isNull();
 
         assertThat(productMapper.selectById(productId).getStock())
-                .as("支付成功真实扣减 1 件库存：3 → 2").isEqualTo(2);
+                .as("支付不扣库存（下单即扣、取消回补，扣减不在支付环节进行）").isEqualTo(3);
     }
 
     @Test
@@ -251,7 +250,7 @@ class PaymentTest {
 
     @Test
     @Order(6)
-    void 申请退款后支付单已退款且订单回退为失败() throws Exception {
+    void 申请退款只改支付单不回退订单状态() throws Exception {
         mockMvc.perform(post("/pay/" + intentId + "/refund"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrlPattern("/pay/" + intentId + "?msg=*"));
@@ -260,10 +259,10 @@ class PaymentTest {
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REFUNDED);
         assertThat(payment.getRefundedAt()).as("退款成功必须落退款时间").isNotNull();
 
+        // 退款是资金动作；B 的订单没有「退款」这个状态，订单必须原样不动
         Intent intent = intentMapper.selectById(intentId);
-        assertThat(intent.getStatus()).as("退款后订单回退为失败").isEqualTo(IntentStatus.FAILED);
-        assertThat(intent.getTradeResult()).isEqualTo(IntentStatus.FAILED);
-        assertThat(intent.getFailReason()).isEqualTo("已退款");
+        assertThat(intent.getStatus()).as("退款不得改动订单状态").isEqualTo(IntentStatus.CREATED);
+        assertThat(intent.getFailReason()).as("退款不是订单取消，不能写取消原因").isNull();
     }
 
     @Test
@@ -300,6 +299,6 @@ class PaymentTest {
         assertThat(paymentMapper.selectByIntentId(otherIntentId).getStatus())
                 .as("越权支付不得改变支付单状态").isEqualTo(PaymentStatus.PENDING);
         assertThat(intentMapper.selectById(otherIntentId).getStatus())
-                .as("越权支付不得改变订单状态").isEqualTo(IntentStatus.PENDING);
+                .as("越权支付不得改变订单状态").isEqualTo(IntentStatus.CREATED);
     }
 }

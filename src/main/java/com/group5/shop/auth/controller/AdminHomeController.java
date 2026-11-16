@@ -88,7 +88,7 @@ public class AdminHomeController {
         model.addAttribute("productTotal", productMapper.selectCount(null));
         model.addAttribute("productOnSale", productMapper.countByStatus(ProductStatus.ON_SALE));
         model.addAttribute("productDelisted", productMapper.countByStatus(ProductStatus.DELISTED));
-        model.addAttribute("intentPending", intentMapper.countByStatus(IntentStatus.PENDING));
+        model.addAttribute("intentPending", intentMapper.countByStatus(IntentStatus.CREATED));
         model.addAttribute("intentTotal", intentMapper.selectCount(null));
 
         return "auth/admin-home";

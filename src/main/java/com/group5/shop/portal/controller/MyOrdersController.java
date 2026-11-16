@@ -84,9 +84,9 @@ public class MyOrdersController {
 
         boolean ok = orderHistoryService.cancel(buyer.getId(), id);
         if (ok) {
-            return "redirect:/my/orders?msg=" + encode("意向已撤销，已退出排队队列");
+            return "redirect:/my/orders?msg=" + encode("订单已取消，库存已回补");
         }
-        return "redirect:/my/orders?error=" + encode("撤销失败：该意向不存在，或当前状态不可撤销（仅排队中的意向可撤销）");
+        return "redirect:/my/orders?error=" + encode("取消失败：订单不存在，或已开始发货/已结束，不能取消");
     }
 
     private String encode(String text) {

@@ -178,7 +178,7 @@ class CommonLayerTest {
     // ------------------------------------------------------------------
 
     @Test
-    void 队列应按提交时间正序且同一毫秒用id兜底() {
+    void 订单列表按下单时间倒序且同一毫秒用id兜底() {
         long now = TimeUtils.nowMillis();
 
         Product product = new Product();
@@ -200,18 +200,19 @@ class CommonLayerTest {
         // 同一毫秒的两条：id 小的必须排在前面
         assertTrue(later1.getId() < later2.getId());
 
-        List<Intent> queue = intentMapper.selectQueue(product.getId());
-        assertEquals(3, queue.size());
-        assertEquals("先到者", queue.get(0).getBuyerName(), "时间最早的在队首");
-        assertEquals("后到者甲", queue.get(1).getBuyerName(), "同一毫秒按 id 升序");
-        assertEquals("后到者乙", queue.get(2).getBuyerName());
+        List<Intent> all = intentMapper.selectByProduct(product.getId(), null);
+        assertEquals(3, all.size());
+        assertEquals("后到者乙", all.get(0).getBuyerName(), "最新的排最上面；同一毫秒按 id 倒序");
+        assertEquals("后到者甲", all.get(1).getBuyerName(), "同一毫秒按 id 倒序");
+        assertEquals("先到者", all.get(2).getBuyerName(), "下单最早的在最后");
 
-        // 撤销一条后，剩余两条仍按原顺序（位次不落库，天然前移）
+        // 取消不删单：卖家仍能在列表里查到，只是状态变了；按状态筛选也生效
         earliest.setStatus(IntentStatus.CANCELLED);
         intentMapper.updateById(earliest);
-        List<Intent> afterCancel = intentMapper.selectQueue(product.getId());
-        assertEquals(2, afterCancel.size());
-        assertEquals("后到者甲", afterCancel.get(0).getBuyerName());
+        List<Intent> afterCancel = intentMapper.selectByProduct(product.getId(), null);
+        assertEquals(3, afterCancel.size(), "终局订单不该从列表里消失");
+        assertEquals(1, intentMapper.selectByProduct(product.getId(), IntentStatus.CANCELLED).size());
+        assertEquals(2, intentMapper.selectByProduct(product.getId(), IntentStatus.CREATED).size());
 
         // 口令码可反查
         assertNotNull(intentMapper.selectByTokenCode(later1.getTokenCode()));
@@ -224,7 +225,7 @@ class CommonLayerTest {
         intent.setBuyerName(buyerName);
         intent.setPhone("13800000000");
         intent.setTokenCode(TimeUtils.randomTokenCode());
-        intent.setStatus(IntentStatus.PENDING);
+        intent.setStatus(IntentStatus.CREATED);
         intent.setCreatedAt(createdAt);
         intentMapper.insert(intent);
         return intent;

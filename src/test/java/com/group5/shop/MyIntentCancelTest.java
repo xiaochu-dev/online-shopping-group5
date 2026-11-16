@@ -35,16 +35,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 迭代 3 新增：买家「进行中意向」可见 + 自助撤销 的验收测试。
+ * B.1.2 验收测试：客户在「开始发货」之前可以取消订单。
  *
- * <p>补上原设计的缺口——原口径只让客户看到已出结果的单，客户提交意向后
- * 既查不到、也撤不了，等于进入黑箱。</p>
+ * <p>迭代 3 的这份测试测的是「仅排队中可撤销、卖家确认后客户就无权反悔」，
+ * 与新口径<b>正好相反</b>：B 明确要求客户在 created / confirmed / prepared 三态都能取消，
+ * 只有到 shipped 之后才关上这道门。所以边界点从「卖家确认」移到了「开始发货」。</p>
  *
- * <p>四条必须钉住的规则：<b>排队中可见</b>、<b>仅本人可撤销</b>、
- * <b>仅排队中可撤销</b>、<b>撤销后退出队列</b>。其中「仅本人」是安全底线，
- * 用带 {@code buyer_id} 条件的原子 UPDATE 保证，不靠应用层先查后改。</p>
+ * <p>四条必须钉住的规则：<b>进行中可见</b>、<b>仅本人可取消</b>、
+ * <b>发货前可取消（含已确认、已备货）</b>、<b>发货后不可取消</b>。</p>
  *
- * @author 胡成溯（组长）
+ * @author 周到（迭代 4 · B.1.2）
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -95,85 +95,108 @@ class MyIntentCancelTest {
     // ------------------------------------------------------------------
 
     @Test
-    void 排队中的意向在我的订单可见且可撤销() throws Exception {
-        Long productId = insertProduct("待撤销的键盘");
-        Long intentId = insertIntent(buyerAId, productId, IntentStatus.PENDING);
+    void 进行中的订单在我的订单可见且可取消() throws Exception {
+        Long productId = insertProduct("待取消的键盘");
+        Long intentId = insertIntent(buyerAId, productId, IntentStatus.CREATED);
 
-        // 1. 提交后能在「进行中」看到
+        // 1. 下单后能在「进行中」看到，并且有取消入口
         String html = bodyOf(mockMvc.perform(get("/my/orders").cookie(loginCookie(USER_A)))
                 .andExpect(status().isOk()).andReturn());
-        assertThat(html).contains("进行中的意向");
-        assertThat(html).contains("待撤销的键盘");
-        assertThat(html).contains("撤销意向");
+        assertThat(html).contains("进行中的订单");
+        assertThat(html).contains("待取消的键盘");
+        assertThat(html).contains("取消订单");
 
-        // 2. 撤销成功并跳回列表
+        // 2. 取消成功并跳回列表
         mockMvc.perform(post("/my/orders/" + intentId + "/cancel").cookie(loginCookie(USER_A)))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrlPattern("/my/orders?msg=*"));
 
-        // 3. 状态已变 cancelled
-        assertThat(intentMapper.selectById(intentId).getStatus()).isEqualTo(IntentStatus.CANCELLED);
+        // 3. 状态变成 cancelled，并且记下了取消方与时间
+        Intent cancelled = intentMapper.selectById(intentId);
+        assertThat(cancelled.getStatus()).isEqualTo(IntentStatus.CANCELLED);
+        assertThat(cancelled.getCancelledBy()).isEqualTo(IntentStatus.CANCELLED_BY_BUYER);
+        assertThat(cancelled.getCancelledAt()).isNotNull();
 
         // 4. 不再出现在「进行中」
+        // 5. 已取消的单退出「进行中」列表（用查询判定，避免商品名同时出现在「已结束」区块里）
         String after = bodyOf(mockMvc.perform(get("/my/orders").cookie(loginCookie(USER_A)))
                 .andExpect(status().isOk()).andReturn());
-        assertThat(after).contains("当前没有进行中的意向");
+        assertThat(after).isNotNull();
+        assertThat(intentMapper.selectActiveByBuyer(buyerAId))
+                .as("已取消的单不该再出现在进行中列表")
+                .noneMatch(i -> i.getId().equals(intentId));
     }
 
     @Test
-    void 不能撤销别人的意向() throws Exception {
-        Long productId = insertProduct("别人家的椅子");
-        Long intentId = insertIntent(buyerAId, productId, IntentStatus.PENDING);
+    void 已确认与已备货的订单客户仍可取消() throws Exception {
+        // B.1.2 的关键点：关闸线在「开始发货」，不是「商家确认」
+        for (String status : List.of(IntentStatus.CONFIRMED, IntentStatus.PREPARED)) {
+            Long productId = insertProduct("可取消的台灯-" + status);
+            Long intentId = insertIntent(buyerAId, productId, status);
 
-        // B 去撤销 A 的单：必须失败
+            mockMvc.perform(post("/my/orders/" + intentId + "/cancel").cookie(loginCookie(USER_A)))
+                    .andExpect(status().is3xxRedirection())
+                    .andExpect(redirectedUrlPattern("/my/orders?msg=*"));
+
+            assertThat(intentMapper.selectById(intentId).getStatus())
+                    .as("「%s」态仍属于发货前，客户可以取消", status)
+                    .isEqualTo(IntentStatus.CANCELLED);
+        }
+    }
+
+    @Test
+    void 已发货的订单客户不可取消() throws Exception {
+        Long productId = insertProduct("已发货的加湿器");
+        Long intentId = insertIntent(buyerAId, productId, IntentStatus.SHIPPED);
+
+        mockMvc.perform(post("/my/orders/" + intentId + "/cancel").cookie(loginCookie(USER_A)))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern("/my/orders?error=*"));
+
+        assertThat(intentMapper.selectById(intentId).getStatus())
+                .as("商家开始发货后客户不能再取消")
+                .isEqualTo(IntentStatus.SHIPPED);
+    }
+
+    @Test
+    void 已完成的订单不可取消() throws Exception {
+        Long productId = insertProduct("已完成的显示器");
+        Long intentId = insertIntent(buyerAId, productId, IntentStatus.COMPLETED);
+
+        mockMvc.perform(post("/my/orders/" + intentId + "/cancel").cookie(loginCookie(USER_A)))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern("/my/orders?error=*"));
+
+        assertThat(intentMapper.selectById(intentId).getStatus())
+                .as("交易完成是终局，不可取消")
+                .isEqualTo(IntentStatus.COMPLETED);
+    }
+
+    @Test
+    void 不能取消别人的订单() throws Exception {
+        Long productId = insertProduct("别人家的椅子");
+        Long intentId = insertIntent(buyerAId, productId, IntentStatus.CREATED);
+
+        // B 去取消 A 的单：必须失败
         mockMvc.perform(post("/my/orders/" + intentId + "/cancel").cookie(loginCookie(USER_B)))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrlPattern("/my/orders?error=*"));
 
-        // A 的单必须原封不动仍是 pending
         assertThat(intentMapper.selectById(intentId).getStatus())
-                .as("越权撤销不能改动他人单据")
-                .isEqualTo(IntentStatus.PENDING);
+                .as("越权取消不能改动他人订单")
+                .isEqualTo(IntentStatus.CREATED);
     }
 
     @Test
-    void 交易中的意向不可撤销() throws Exception {
-        Long productId = insertProduct("交易中的台灯");
-        Long intentId = insertIntent(buyerAId, productId, IntentStatus.TRADING);
-
-        mockMvc.perform(post("/my/orders/" + intentId + "/cancel").cookie(loginCookie(USER_A)))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrlPattern("/my/orders?error=*"));
-
-        assertThat(intentMapper.selectById(intentId).getStatus())
-                .as("卖家已确认进入交易的单不能被买家单方面撤销")
-                .isEqualTo(IntentStatus.TRADING);
-    }
-
-    @Test
-    void 已成交的意向不可撤销() throws Exception {
-        Long productId = insertProduct("已成交的加湿器");
-        Long intentId = insertIntent(buyerAId, productId, IntentStatus.SUCCESS);
-
-        mockMvc.perform(post("/my/orders/" + intentId + "/cancel").cookie(loginCookie(USER_A)))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrlPattern("/my/orders?error=*"));
-
-        assertThat(intentMapper.selectById(intentId).getStatus())
-                .as("已成交的单是终态，不可撤销")
-                .isEqualTo(IntentStatus.SUCCESS);
-    }
-
-    @Test
-    void 未登录不能撤销() throws Exception {
+    void 未登录不能取消() throws Exception {
         Long productId = insertProduct("未登录测试品");
-        Long intentId = insertIntent(buyerAId, productId, IntentStatus.PENDING);
+        Long intentId = insertIntent(buyerAId, productId, IntentStatus.CREATED);
 
         mockMvc.perform(post("/my/orders/" + intentId + "/cancel"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrlPattern("/buyer/login?redirect=*"));
 
-        assertThat(intentMapper.selectById(intentId).getStatus()).isEqualTo(IntentStatus.PENDING);
+        assertThat(intentMapper.selectById(intentId).getStatus()).isEqualTo(IntentStatus.CREATED);
     }
 
     // ------------------------------------------------------------------
@@ -206,8 +229,7 @@ class MyIntentCancelTest {
         intent.setTradeAddress(buyer.getDefaultPlace());
         intent.setStatus(status);
         intent.setCreatedAt(1_600_000_000_000L);
-        if (IntentStatus.SUCCESS.equals(status) || IntentStatus.FAILED.equals(status)) {
-            intent.setTradeResult(status);
+        if (IntentStatus.isTerminal(status)) {
             intent.setFinishedAt(1_700_000_000_000L);
         }
         intentMapper.insert(intent);

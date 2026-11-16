@@ -1,6 +1,7 @@
 package com.group5.shop.portal.service;
 
 import com.group5.shop.common.api.PageResult;
+import com.group5.shop.common.exception.BusinessException;
 import com.group5.shop.portal.domain.Intent;
 import com.group5.shop.portal.domain.IntentMapper;
 import com.group5.shop.portal.domain.OrderItem;
@@ -14,15 +15,17 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 「我的订单」查询（T2-17）。
+ * 「我的订单」查询（T2-17；迭代 4 改为五态口径）。
  *
- * <p><b>只收已结束的单</b>（success / failed），按交易时间倒序分页。这是澄清结论里
- * 明确取舍的结果：客户看不到排队位次、也不能自助取消，所以「还没出结果的单」
- * 干脆不进历史列表，避免出现「一直显示排队中却永远不动」的困惑。下单成功页会明确提示
- * 「已提交，等待卖家确认」，补上这段反馈。</p>
+ * <p><b>两个区块</b>：</p>
+ * <ul>
+ *   <li><b>进行中</b>：created / confirmed / prepared / shipped，不分页。
+ *       B.1.2 要求「客户在发货前可以取消」，客户必须先看得到自己的单；</li>
+ *   <li><b>已结束</b>：completed / cancelled，按结束时间倒序分页。</li>
+ * </ul>
  *
- * <p>商品名与图片用<b>当前</b>商品数据：本迭代没有商品删除功能，商品不会消失；
- * 名称与图片也不可编辑（只能改库存），因此不存在「历史单显示新名字」的问题。</p>
+ * <p>商品名与图片用<b>当前</b>商品数据：本迭代没有物理删除商品（有在途订单只能下架），
+ * 商品不会消失，因此不存在「历史单显示不到商品」的问题。</p>
  *
  * @author 周到
  */
@@ -34,10 +37,13 @@ public class OrderHistoryService {
 
     private final IntentMapper intentMapper;
     private final ProductMapper productMapper;
+    private final OrderStatusService orderStatusService;
 
-    public OrderHistoryService(IntentMapper intentMapper, ProductMapper productMapper) {
+    public OrderHistoryService(IntentMapper intentMapper, ProductMapper productMapper,
+                               OrderStatusService orderStatusService) {
         this.intentMapper = intentMapper;
         this.productMapper = productMapper;
+        this.orderStatusService = orderStatusService;
     }
 
     /**
@@ -77,21 +83,27 @@ public class OrderHistoryService {
     }
 
     /**
-     * 买家撤销自己的意向（迭代 3 新增）。
+     * 客户取消自己的订单（B.1.2）。
      *
-     * <p>撤销的合法性完全交给 SQL 的 WHERE 条件判定（本人 + 仅排队中），
-     * 服务层不先查再改——先查后改在并发下存在「查的时候还是 pending、改的时候已被卖家确认」
-     * 的窗口，直接带条件 UPDATE 让数据库原子地判定。</p>
+     * <p>合法性判定全部交给 {@link OrderStatusService#cancelByBuyer}：它负责归属校验、
+     * 「发货后不可取消」的关闸、以及取消后的库存回补。<b>回补是这次口径变化带来的新动作</b>，
+     * 所以不能再像迭代 3 那样用一条 UPDATE 直接改状态——那样库存不会跟着回来。</p>
      *
      * @param buyerId  当前登录买家 id
-     * @param intentId 意向 id
-     * @return true = 撤销成功；false = 不存在 / 非本人 / 状态已不可撤销
+     * @param intentId 订单 id
+     * @return true = 取消成功；false = 不存在 / 非本人 / 状态不可取消
      */
     public boolean cancel(Long buyerId, Long intentId) {
         if (buyerId == null || intentId == null) {
             return false;
         }
-        return intentMapper.cancelByIdAndBuyer(intentId, buyerId) > 0;
+        try {
+            orderStatusService.cancelByBuyer(intentId, buyerId, null);
+            return true;
+        } catch (BusinessException e) {
+            // 不区分「不存在」与「不可取消」：避免用返回差异探测别人的单号
+            return false;
+        }
     }
 
     /**

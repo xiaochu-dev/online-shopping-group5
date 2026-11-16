@@ -231,7 +231,7 @@ class PortalApiTest {
                 .andExpect(status().isFound())
                 .andExpect(redirectedUrlPattern("/products/" + productOrder + "?msg=*"));
 
-        Intent saved = intentMapper.selectQueue(productOrder).stream()
+        Intent saved = intentMapper.selectActiveByProduct(productOrder).stream()
                 .filter(intent -> buyerAId.equals(intent.getBuyerId()))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("下单成功但 intent 表没有该买家的记录"));
@@ -241,7 +241,7 @@ class PortalApiTest {
         assertThat(saved.getTradeAddress())
                 .as("没填交易地点时应回落到注册时的默认地点")
                 .isEqualTo(PLACE_A);
-        assertThat(saved.getStatus()).isEqualTo(IntentStatus.PENDING);
+        assertThat(saved.getStatus()).isEqualTo(IntentStatus.CREATED);
         assertThat(saved.getTokenCode()).as("新单不再使用口令码兜底").isNull();
     }
 
@@ -263,15 +263,15 @@ class PortalApiTest {
         assertThat(html).contains("API 测试商品·A 的成交单");
         assertThat(html).as("A 不能看到 B 的订单").doesNotContain("API 测试商品·B 的成交单");
 
-        // 迭代 3 口径变更：排队中的单不再被隐藏，而是归入「进行中的意向」区块；
-        // 但仍不能混进「已结束的订单」区块。用两个区块标题的位置来判定归属。
-        int activeHeading = html.indexOf("进行中的意向");
+        // 迭代 4 口径：进行中的单归入「进行中的订单」区块，不能混进「已结束的订单」；
+        // 用两个区块标题的位置来判定归属。
+        int activeHeading = html.indexOf("进行中的订单");
         int finishedHeading = html.indexOf("已结束的订单");
         int pendingProduct = html.indexOf("API 测试商品·真实下单");
-        assertThat(activeHeading).as("页面应有「进行中的意向」区块").isGreaterThan(-1);
+        assertThat(activeHeading).as("页面应有「进行中的订单」区块").isGreaterThan(-1);
         assertThat(finishedHeading).as("页面应有「已结束的订单」区块").isGreaterThan(-1);
         assertThat(pendingProduct)
-                .as("排队中的单应显示在「进行中」区块内，而非「已结束」区块")
+                .as("进行中的单应显示在「进行中」区块内，而非「已结束」区块")
                 .isGreaterThan(activeHeading)
                 .isLessThan(finishedHeading);
     }
@@ -337,8 +337,7 @@ class PortalApiTest {
         intent.setBuyerName(buyerName);
         intent.setPhone(PHONE_A);
         intent.setTradeAddress(PLACE_A);
-        intent.setStatus(IntentStatus.SUCCESS);
-        intent.setTradeResult(IntentStatus.SUCCESS);
+        intent.setStatus(IntentStatus.COMPLETED);
         long now = System.currentTimeMillis();
         intent.setCreatedAt(now - 120_000L);
         intent.setFinishedAt(now - 60_000L);

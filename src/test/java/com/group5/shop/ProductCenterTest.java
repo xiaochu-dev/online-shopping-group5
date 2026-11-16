@@ -5,7 +5,6 @@ import com.group5.shop.product.domain.*;
 import com.group5.shop.product.util.RichTextSanitizer;
 import com.group5.shop.common.constant.SessionKeys;
 import com.group5.shop.common.exception.BusinessException;
-import com.group5.shop.portal.service.SellerIntentService;
 import com.group5.shop.portal.domain.*;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,7 +42,6 @@ class ProductCenterTest {
     @Autowired ProductDetailService details;
     @Autowired RichTextSanitizer sanitizer;
     @Autowired JdbcTemplate jdbc;
-    @Autowired SellerIntentService trades;
     @Autowired IntentMapper intents;
     @Autowired MockMvc mvc;
     Long leaf;
@@ -114,33 +112,26 @@ class ProductCenterTest {
         jdbc.update("INSERT INTO buyer(username,password_hash,salt,phone,default_place,created_at) VALUES(?,'hash','salt','123','校门',1)",name);
         return jdbc.queryForObject("SELECT id FROM buyer WHERE username=?",Long.class,name);
     }
-    Long intent(Long product) {
-        Intent i=new Intent(); i.setProductId(product);i.setBuyerId(buyer());i.setBuyerName("买家");i.setPhone("123");i.setTradeAddress("校门");i.setStatus("pending");i.setCreatedAt(System.currentTimeMillis());intents.insert(i);return i.getId();
+    /** 造一张进行中的订单（B 起新单落 created，不再是 pending） */
+    Long intent(Long product) { return intent(product, "created"); }
+    Long intent(Long product, String status) {
+        Intent i=new Intent(); i.setProductId(product);i.setBuyerId(buyer());i.setBuyerName("买家");i.setPhone("123");i.setTradeAddress("校门");i.setStatus(status);i.setCreatedAt(System.currentTimeMillis());intents.insert(i);return i.getId();
     }
-    @Test void lastSaleFailsQueueInSameTransaction() {
-        Product p=publish(1); Long first=intent(p.getId()),second=intent(p.getId());
-        trades.confirmTrade(first); assertThat(stock.stockOf(p.getId())).isEqualTo(1);
-        trades.markSuccess(first); assertThat(intents.selectById(first).getStatus()).isEqualTo("success");
-        assertThat(intents.selectById(second).getStatus()).isEqualTo("failed");
-        assertThat(intents.selectById(second).getFinishedAt()).isNotNull();
-        assertThat(details.get(p.getId()).getStatus()).isEqualTo("off_shelf");
-    }
-    @Test void failureDoesNotDeductAndManualOffDuringTradeStaysOff() {
-        Product p=publish(2); Long first=intent(p.getId()); trades.confirmTrade(first);
-        assertThatThrownBy(()->stock.changeStock(1L,p.getId(),0)).isInstanceOf(BusinessException.class);
-        stock.offShelf(1L,p.getId()); trades.markFailed(first,false,"未达成"); assertThat(stock.stockOf(p.getId())).isEqualTo(2);
+    /**
+     * B 口径：在途订单<b>不再冻结商品</b>，下架/重上架都不受订单影响。
+     *
+     * <p>迭代 3 的对应用例是「有交易中的单就冻结商品、售罄后把排队单批量置失败」。
+     * B 允许多笔订单并存（购物车多件、复购），冻结商品会连带挡住后面的客户，
+     * 所以商品状态只跟库存与商家操作有关。订单本身也不该被商品下架改动。</p>
+     */
+    @Test void 在途订单不冻结商品也不受下架影响() {
+        Product p=publish(2); Long order=intent(p.getId());
+        stock.offShelf(1L,p.getId());
+        assertThat(intents.selectById(order).getStatus()).as("商品下架不影响在途订单").isEqualTo("created");
         assertThat(details.get(p.getId()).getOffReason()).isEqualTo("manual");
-        stock.relist(1L,p.getId()); assertThat(details.get(p.getId()).getStatus()).isEqualTo("on_sale");
-    }
-    @Test void queueFailureRollsBackDeduction() {
-        Product p=publish(1); Long pending=intent(p.getId());
-        jdbc.execute("CREATE TRIGGER deny_queue BEFORE UPDATE ON intent WHEN OLD.product_id="+p.getId()+" BEGIN SELECT RAISE(ABORT,'test failure'); END");
-        try {
-            assertThatThrownBy(()->stock.deduct(p.getId())).isInstanceOf(RuntimeException.class);
-            assertThat(stock.stockOf(p.getId())).isEqualTo(1);
-            assertThat(details.get(p.getId()).getStatus()).isEqualTo("on_sale");
-            assertThat(intents.selectById(pending).getStatus()).isEqualTo("pending");
-        } finally {jdbc.execute("DROP TRIGGER deny_queue");}
+        stock.relist(1L,p.getId());
+        assertThat(details.get(p.getId()).getStatus()).as("B 不再因订单冻结商品").isEqualTo("on_sale");
+        assertThat(stock.stockOf(p.getId())).isEqualTo(2);
     }
     @Test void nineImagesSortedAndPrimary() throws Exception {
         List<MultipartFile> files=new ArrayList<>();for(int i=0;i<9;i++)files.add(image(i+".png"));

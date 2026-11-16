@@ -91,7 +91,7 @@ public class PortalController {
         ProductView view = portalService.productDetail(id);
         model.addAttribute("view", view);
         model.addAttribute("product", view.product());
-        model.addAttribute("queueSize", portalService.queueSize(id));
+        model.addAttribute("activeOrderCount", portalService.activeOrderCount(id));
         model.addAttribute("msg", msg);
         model.addAttribute("error", error);
         model.addAttribute("loggedIn", buyerContext.current() != null);
@@ -140,9 +140,9 @@ public class PortalController {
     public String cancelIntent(@RequestParam(value = "tokenCode", required = false) String tokenCode) {
         boolean ok = portalService.cancelByTokenCode(tokenCode);
         if (ok) {
-            return "redirect:/?msg=" + encode("口令码对应的意向已撤销，队列中其余买家自动前移");
+            return "redirect:/?msg=" + encode("口令码对应的订单已取消，库存已回补");
         }
-        return "redirect:/?error=" + encode("口令码无效，或该意向不可撤销（仅排队中的意向可撤销）");
+        return "redirect:/?error=" + encode("口令码无效，或该订单已发货/已结束，不能取消");
     }
 
     // ==================================================================

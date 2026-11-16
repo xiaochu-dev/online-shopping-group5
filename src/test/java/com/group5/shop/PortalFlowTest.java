@@ -218,15 +218,15 @@ class PortalFlowTest {
 
     @Test
     @Order(6)
-    void 在售商品详情可访问且显示排队人数() throws Exception {
+    void 在售商品详情可访问且显示进行中订单数() throws Exception {
         String html = bodyOf(mockMvc.perform(get("/products/" + onSaleId))
                 .andExpect(status().isOk())
                 .andExpect(view().name("portal/product-detail"))
-                .andExpect(model().attributeExists("view", "product", "queueSize"))
+                .andExpect(model().attributeExists("view", "product", "activeOrderCount"))
                 .andReturn());
 
         assertThat(html).contains("机械键盘 87 键");
-        assertThat(html).contains("人在排队");
+        assertThat(html).contains("张进行中的订单");
     }
 
     @Test
@@ -270,12 +270,12 @@ class PortalFlowTest {
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrlPattern("/products/" + onSaleId + "?msg=*"));
 
-        Intent saved = intentMapper.selectActiveQueue(onSaleId).stream()
+        Intent saved = intentMapper.selectActiveByProduct(onSaleId).stream()
                 .filter(i -> BUYER_ID.equals(i.getBuyerId()))
                 .findFirst()
-                .orElseThrow(() -> new AssertionError("下单应写入一条 pending 意向"));
+                .orElseThrow(() -> new AssertionError("下单应写入一条 created 订单"));
 
-        assertThat(saved.getStatus()).isEqualTo(IntentStatus.PENDING);
+        assertThat(saved.getStatus()).isEqualTo(IntentStatus.CREATED);
         assertThat(saved.getBuyerName()).isEqualTo("测试客户");
         assertThat(saved.getPhone()).isEqualTo("13800000000");
         assertThat(saved.getTradeAddress()).isEqualTo("三食堂门口");
@@ -291,7 +291,7 @@ class PortalFlowTest {
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrlPattern("/products/" + onSaleId + "?error=*"));
 
-        long active = intentMapper.selectActiveQueue(onSaleId).stream()
+        long active = intentMapper.selectActiveByProduct(onSaleId).stream()
                 .filter(i -> BUYER_ID.equals(i.getBuyerId()))
                 .count();
         assertThat(active).as("同一买家同一商品最多 1 条未结束意向").isEqualTo(1);
@@ -307,10 +307,10 @@ class PortalFlowTest {
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrlPattern("/products/" + textbookId + "?msg=*"));
 
-        Intent saved = intentMapper.selectActiveQueue(textbookId).stream()
+        Intent saved = intentMapper.selectActiveByProduct(textbookId).stream()
                 .filter(i -> OTHER_BUYER_ID.equals(i.getBuyerId()))
                 .findFirst()
-                .orElseThrow(() -> new AssertionError("下单应写入一条 pending 意向"));
+                .orElseThrow(() -> new AssertionError("下单应写入一条 created 订单"));
 
         assertThat(saved.getTradeAddress()).isEqualTo("东门快递点");
     }
@@ -335,7 +335,7 @@ class PortalFlowTest {
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrlPattern("/products/" + onSaleId + "?error=*"));
 
-        long written = intentMapper.selectActiveQueue(onSaleId).stream()
+        long written = intentMapper.selectActiveByProduct(onSaleId).stream()
                 .filter(i -> Long.valueOf(9003L).equals(i.getBuyerId()))
                 .count();
         assertThat(written).as("两个地点都为空时不得写入队列").isZero();

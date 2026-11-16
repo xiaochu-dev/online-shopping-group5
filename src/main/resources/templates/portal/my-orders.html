@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 我的订单 —— 买家门户：周到（T2-17）；迭代 3 增补「进行中」区块与自助撤销 -->
+<!-- 我的订单 —— 买家门户：周到（T2-17；迭代 4 改五态 + 客户取消，B.1.2） -->
 <html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
 <head th:replace="~{portal/fragments :: head('我的订单')}"></head>
 <body>
@@ -13,23 +13,23 @@
     <div class="banner banner-ok" th:if="${param.msg}" th:text="${param.msg}">操作成功</div>
     <div class="banner banner-error" th:if="${param.error}" th:text="${param.error}">操作失败</div>
 
-    <!-- ==================== 一、进行中的意向 ==================== -->
+    <!-- ==================== 一、进行中的订单 ==================== -->
     <div class="card">
-        <h3 style="margin-top:0;">进行中的意向</h3>
+        <h3 style="margin-top:0;">进行中的订单</h3>
         <p class="muted">
-            排队中与交易中的意向都在这里，按提交时间正序（先提交的在上）。
-            <strong>排队中的可以撤销</strong>；一旦卖家确认进入交易，就不能再撤销了。
+            订单会按「客户下单 → 商家确认 → 备货完成 → 开始发货 → 交易完成」逐步推进。
+            <strong>商家开始发货之前，你都可以取消订单</strong>；取消后订单占用的库存会回补。
         </p>
 
         <div class="empty-tip" th:if="${activeIntents.isEmpty()}">
-            <p class="muted">当前没有进行中的意向。去<a th:href="@{/}">商品列表</a>看看有什么可买的。</p>
+            <p class="muted">当前没有进行中的订单。去<a th:href="@{/}">商品列表</a>看看有什么可买的。</p>
         </div>
 
         <table class="table" th:if="${!activeIntents.isEmpty()}">
             <thead>
             <tr>
                 <th>商品</th>
-                <th>提交时间</th>
+                <th>下单时间</th>
                 <th>当前状态</th>
                 <th>操作</th>
             </tr>
@@ -47,20 +47,21 @@
                         </div>
                     </div>
                 </td>
-                <td th:text="${row.intent().createdAtText}">2026-11-04 16:00</td>
+                <td th:text="${row.intent().createdAtText}">2026-11-16 10:00</td>
                 <td>
-                    <span class="tag"
-                          th:classappend="${row.intent().status == 'pending'} ? 'tag-orange' : 'tag-blue'"
-                          th:text="${row.intent().statusLabel}">排队中</span>
+                    <span class="tag" th:classappend="${row.intent().statusCss}"
+                          th:text="${row.intent().statusLabel}">商家确认</span>
                 </td>
                 <td>
-                    <!-- 仅「排队中」可撤销；交易中显示为不可操作 -->
-                    <form th:if="${row.intent().isCancellable()}"
+                    <!-- B.1.2：开始发货之前可以取消；到 shipped 之后按钮消失 -->
+                    <form th:if="${row.intent().isBuyerCancellable()}"
                           th:action="@{'/my/orders/' + ${row.intent().id} + '/cancel'}" method="post"
-                          onsubmit="return confirm('确定撤销这条意向吗？撤销后将退出排队队列，需要重新提交才能再排队。');">
-                        <button class="btn btn-sm" type="submit">撤销意向</button>
+                          onsubmit="return confirm('确定取消这张订单吗？取消后库存会回补，且不可恢复。');">
+                        <button class="btn btn-sm" type="submit">取消订单</button>
                     </form>
-                    <span class="muted" th:unless="${row.intent().isCancellable()}">交易中，不可撤销</span>
+                    <span class="muted" th:unless="${row.intent().isBuyerCancellable()}">
+                        商家已开始发货，不能取消
+                    </span>
                 </td>
             </tr>
             </tbody>
@@ -70,10 +71,10 @@
     <!-- ==================== 二、已结束的订单 ==================== -->
     <div class="card">
         <h3 style="margin-top:0;">已结束的订单</h3>
-        <p class="muted">交易成功 / 交易失败的记录，按交易时间倒序。</p>
+        <p class="muted">交易完成 / 已取消的订单，按结束时间倒序。</p>
 
         <div class="empty-tip" th:if="${pageResult.total == 0}">
-            <p class="muted">还没有已结束的订单。买家提交意向、卖家确认交易后，结果会出现在这里。</p>
+            <p class="muted">还没有已结束的订单。订单走完整个流程或被取消后，会出现在这里。</p>
         </div>
 
         <div th:if="${pageResult.total > 0}">
@@ -83,8 +84,8 @@
                 <tr>
                     <th>商品</th>
                     <th>下单时间</th>
-                    <th>交易结果</th>
-                    <th>交易时间</th>
+                    <th>结果</th>
+                    <th>结束时间</th>
                     <th>备注</th>
                 </tr>
                 </thead>
@@ -101,15 +102,17 @@
                             </div>
                         </div>
                     </td>
-                    <td th:text="${row.intent().createdAtText}">2026-10-21 16:00</td>
+                    <td th:text="${row.intent().createdAtText}">2026-11-16 10:00</td>
                     <td>
-                        <span class="tag" th:classappend="${row.resultCss()}"
-                              th:text="${row.intent().tradeResultLabel}">交易成功</span>
+                        <span class="tag" th:classappend="${row.intent().statusCss}"
+                              th:text="${row.intent().statusLabel}">交易完成</span>
                     </td>
-                    <td th:text="${row.intent().finishedAtText}">2026-10-21 16:30</td>
+                    <td th:text="${row.intent().finishedAtText}">2026-11-16 15:00</td>
                     <td class="muted">
+                        <span th:if="${row.intent().cancelText != null and !row.intent().cancelText.isEmpty()}"
+                              th:text="${row.intent().cancelText}">您已取消</span>
                         <span th:if="${row.intent().failReason != null and !row.intent().failReason.isEmpty()}"
-                              th:text="'失败原因：' + ${row.intent().failReason}">失败原因</span>
+                              th:text="${row.intent().failReason}">取消原因</span>
                         <span th:if="${row.intent().tradeAddress != null and !row.intent().tradeAddress.isEmpty()}"
                               th:text="'交易地点：' + ${row.intent().tradeAddress}">交易地点</span>
                     </td>

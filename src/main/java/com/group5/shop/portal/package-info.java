@@ -17,8 +17,8 @@
  *   <li>{@link com.group5.shop.product.domain.ProductMapper#selectPage}
  *       —— 分页插件已在 {@code common/config/MybatisPlusConfig} 注册（方言已指定 SQLite，
  *       返回 {@code Page<Product>} 的 total 是真实总数，不是内存截断）；</li>
- *   <li>{@link com.group5.shop.portal.domain.IntentMapper#selectQueue(Long)} —— 队列按
- *       {@code created_at, id} 正序，位次不落库；</li>
+ *   <li>{@link com.group5.shop.portal.domain.IntentMapper#selectByProduct(Long, String)} —— 按商品取订单、
+ *       可选按状态筛选（迭代 4 起没有「队列位次」，改为五态筛选）；</li>
  *   <li>{@link com.group5.shop.portal.domain.IntentMapper#selectByTokenCode(String)} —— 口令码撤销；</li>
  *   <li>{@link com.group5.shop.common.util.TimeUtils#randomTokenCode()} —— 32 位十六进制口令码；</li>
  *   <li>{@link com.group5.shop.common.api.PageResult#of} —— 把 MP 的 Page 转成页面用的分页对象；</li>

@@ -108,14 +108,14 @@ class MyOrdersFlowTest {
 
         earlyProductId = insertProduct("成交较早的台灯", categoryId);
         lateProductId = insertProduct("成交较晚的椅子", categoryId);
-        pendingProductId = insertProduct("还在排队的加湿器", categoryId);
+        pendingProductId = insertProduct("仍在进行中的加湿器", categoryId);
 
         // 失败的早、成功的晚：用来验证「按交易时间倒序」而不是按主键顺/逆序
-        insertIntent(buyerAId, earlyProductId, IntentStatus.FAILED, 1_700_000_000_000L);
-        insertIntent(buyerAId, lateProductId, IntentStatus.SUCCESS, 1_700_000_900_000L);
+        insertIntent(buyerAId, earlyProductId, IntentStatus.CANCELLED, 1_700_000_000_000L);
+        insertIntent(buyerAId, lateProductId, IntentStatus.COMPLETED, 1_700_000_900_000L);
 
-        // 排队中的单：不应进入历史列表
-        insertIntent(buyerAId, pendingProductId, IntentStatus.PENDING, null);
+        // 进行中的单：不应进入「已结束」列表
+        insertIntent(buyerAId, pendingProductId, IntentStatus.CREATED, null);
     }
 
     private Long insertProduct(String name, Long categoryId) {
@@ -145,9 +145,7 @@ class MyOrdersFlowTest {
         intent.setStatus(status);
         intent.setCreatedAt(1_600_000_000_000L);
         intent.setFinishedAt(finishedAt);
-        if (IntentStatus.SUCCESS.equals(status) || IntentStatus.FAILED.equals(status)) {
-            intent.setTradeResult(status);
-        }
+        // 迭代 4 起结果由 status 表达，trade_result 不再写（B 停用该列）
         intentMapper.insert(intent);
     }
 
@@ -177,7 +175,7 @@ class MyOrdersFlowTest {
     }
 
     @Test
-    void 已结束订单按交易时间倒序_排队中的单归入进行中() throws Exception {
+    void 已结束订单按结束时间倒序_进行中的单归入进行中() throws Exception {
         String html = bodyOf(mockMvc.perform(get("/my/orders").cookie(loginCookie(USER_A)))
                 .andExpect(status().isOk())
                 .andExpect(view().name("portal/my-orders"))
@@ -186,13 +184,12 @@ class MyOrdersFlowTest {
 
         assertThat(html).contains("成交较早的台灯");
         assertThat(html).contains("成交较晚的椅子");
-        assertThat(html).contains("交易失败");
-        assertThat(html).contains("交易成功");
+        assertThat(html).contains("已取消");
+        assertThat(html).contains("交易完成");
 
-        // 迭代 3 口径变更：排队中的单不再被隐藏，而是归入「进行中的意向」区块，
-        // 已结束区块仍然只放有结果的单。
-        assertThat(html).contains("进行中的意向");
-        assertThat(html).contains("还在排队的加湿器");
+        // 迭代 4 口径：进行中的单归入「进行中的订单」区块，已结束区块只放终局的单。
+        assertThat(html).contains("进行中的订单");
+        assertThat(html).contains("仍在进行中的加湿器");
 
         // 交易时间倒序：成交晚的椅子必须排在成交早的台灯前面
         assertThat(html.indexOf("成交较晚的椅子"))
@@ -206,8 +203,8 @@ class MyOrdersFlowTest {
                 .andExpect(status().isOk()).andReturn());
 
         assertThat(html).contains("还没有已结束的订单");
-        assertThat(html).contains("当前没有进行中的意向");
+        assertThat(html).contains("当前没有进行中的订单");
         assertThat(html).doesNotContain("成交较早的台灯");
-        assertThat(html).doesNotContain("还在排队的加湿器");
+        assertThat(html).doesNotContain("仍在进行中的加湿器");
     }
 }
