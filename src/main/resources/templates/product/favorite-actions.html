@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<body>
+<div th:fragment="actions(productId)">
+    <form th:action="@{/products/{id}/favorite(id=${productId})}" method="post">
+        <button class="btn" type="submit">收藏商品</button>
+    </form>
+</div>
+</body>
+</html>

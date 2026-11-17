@@ -92,6 +92,8 @@
             <button type="submit" class="btn">加入购物车</button>
         </form>
 
+        <div th:replace="~{product/favorite-actions :: actions(${product.id})}"></div>
+
         <!-- 未登录：引导登录，带回跳地址 -->
         <div th:if="${!loggedIn and view.tradable()}">
             <p class="muted">

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{portal/fragments :: head('我的收藏')}"></head>
+<body>
+<div th:replace="~{portal/fragments :: buyerTopbar('favorites')}"></div>
+
+<main class="container">
+    <h2>我的收藏</h2>
+    <div class="banner banner-ok" th:if="${msg}" th:text="${msg}"></div>
+    <div class="banner banner-error" th:if="${error}" th:text="${error}"></div>
+
+    <div class="empty-tip" th:if="${favorites.isEmpty()}">
+        <p>还没有收藏。去<a th:href="@{/}">商品列表</a>看看吧。</p>
+    </div>
+    <table class="table" th:unless="${favorites.isEmpty()}">
+        <thead>
+        <tr>
+            <th scope="col">商品</th>
+            <th scope="col">价格</th>
+            <th scope="col">状态</th>
+            <th scope="col">操作</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="product : ${favorites}"
+            th:with="visible=${product.status == 'on_sale'}, purchasable=${visible and product.stock > 0},
+                     soldOut=${product.stock == 0 and (visible or product.offReason == 'auto')}">
+            <td>
+                <a th:if="${visible}" th:href="@{/products/{id}(id=${product.id})}" th:text="${product.name}"></a>
+                <span th:unless="${visible}" th:text="${product.name}"></span>
+            </td>
+            <td th:text="'¥ ' + ${product.priceYuan}"></td>
+            <td><span class="tag" th:classappend="${soldOut ? 'tag-gray' : product.statusCss}"
+                      th:text="${soldOut ? '无货' : product.statusLabel}"></span></td>
+            <td>
+                <form th:if="${purchasable}" th:action="@{/cart/add}" method="post">
+                    <input type="hidden" name="productId" th:value="${product.id}">
+                    <button class="btn btn-sm" type="submit">加入购物车</button>
+                </form>
+                <form th:action="@{/products/{id}/favorite/remove(id=${product.id})}" method="post">
+                    <button class="btn btn-sm" type="submit">取消收藏</button>
+                </form>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+</main>
+</body>
+</html>
