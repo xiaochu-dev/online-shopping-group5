@@ -146,6 +146,17 @@ public class CartService {
             throw new BusinessException(ErrorCode.PARAM_INVALID,
                     "购买数量需在 " + MIN_QUANTITY + " ~ " + MAX_QUANTITY + " 件之间");
         }
+
+        // 改数量同样受库存约束：否则加购时拦住、进页面再改成 99 就等于绕过了校验
+        Cart row = cartMapper.selectById(cartId);
+        if (row == null || !buyerId.equals(row.getBuyerId())) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "购物车条目不存在");
+        }
+        ProductReadPort reader = productReadPort.getIfAvailable();
+        if (reader != null) {
+            reader.find(row.getProductId()).ifPresent(snapshot -> requireStockEnough(snapshot, quantity));
+        }
+
         int rows = cartMapper.updateQuantity(cartId, buyerId, quantity, TimeUtils.nowMillis());
         if (rows == 0) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "购物车条目不存在");
@@ -227,13 +238,18 @@ public class CartService {
     }
 
     /**
-     * 把选中的条目转为收藏，成功后从购物车移除（已收藏过的由收藏域幂等跳过）。
+     * 把选中的条目转为收藏，成功后从购物车移除。
+     *
+     * <p><b>口径：按「移动」处理</b>——勾选行<b>无条件</b>移出购物车，即使某件商品此前
+     * 已经收藏过（收藏域幂等跳过，不产生重复行）。所以「移出条数」恒等于勾选条数，
+     * 而「收藏新增条数」可能更小；两个数必须分开回报，否则页面会出现
+     * 「已转收藏 1 件」但购物车少了 3 行的矛盾。</p>
      *
      * @param cartIds 选中的购物车条目 id；为空表示整车转收藏
-     * @return 本次新增的收藏条数
+     * @return 移出条数与收藏新增条数
      */
     @Transactional
-    public int moveToFavorites(Long buyerId, List<Long> cartIds) {
+    public FavoriteMoveResult moveToFavorites(Long buyerId, List<Long> cartIds) {
         FavoritePort port = favoritePort.getIfAvailable();
         if (port == null) {
             throw new BusinessException(ErrorCode.PARAM_INVALID,
@@ -248,7 +264,7 @@ public class CartService {
         List<Long> productIds = selected.stream().map(Cart::getProductId).collect(Collectors.toList());
         int added = port.addToFavorites(buyerId, productIds);
         cartMapper.deleteByBuyerAndIds(buyerId, joinIds(selected));
-        return added;
+        return new FavoriteMoveResult(selected.size(), added);
     }
 
     // ==================================================================

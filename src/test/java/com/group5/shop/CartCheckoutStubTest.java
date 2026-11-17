@@ -5,6 +5,7 @@ import com.group5.shop.buyer.domain.BuyerMapper;
 import com.group5.shop.buyer.session.BuyerSessionCookie;
 import com.group5.shop.cart.domain.CartMapper;
 import com.group5.shop.cart.port.CartCheckoutLine;
+import com.group5.shop.cart.port.FavoritePort;
 import com.group5.shop.cart.port.OrderCreatePort;
 import com.group5.shop.common.constant.ProductStatus;
 import com.group5.shop.product.domain.Category;
@@ -27,6 +28,8 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -83,11 +86,31 @@ class CartCheckoutStubTest {
         }
     }
 
+    /** 顶替收藏域的测试桩：记录收到的商品，并按预设返回「真正新增」的条数 */
+    static class StubFavoritePort implements FavoritePort {
+
+        private final List<List<Long>> calls = new ArrayList<>();
+
+        /** 下一次调用返回的新增条数（模拟「部分商品此前已收藏」） */
+        private int addedOnNextCall = 1;
+
+        @Override
+        public int addToFavorites(Long buyerId, List<Long> productIds) {
+            calls.add(List.copyOf(productIds));
+            return addedOnNextCall;
+        }
+    }
+
     @TestConfiguration
     static class StubConfig {
         @Bean
         OrderCreatePort orderCreatePort() {
             return new StubOrderPort();
+        }
+
+        @Bean
+        FavoritePort favoritePort() {
+            return new StubFavoritePort();
         }
     }
 
@@ -109,6 +132,9 @@ class CartCheckoutStubTest {
     @Autowired
     private OrderCreatePort orderCreatePort;
 
+    @Autowired
+    private FavoritePort favoritePort;
+
     /**
      * 每个用例前清空购物车与桩记录。
      *
@@ -127,12 +153,14 @@ class CartCheckoutStubTest {
     private static Long buyerId;
     private static Long productA;
     private static Long productB;
+    private static Long productC;
 
     @BeforeAll
     void seed() throws Exception {
         Category category = categoryMapper.selectEnabled().get(0);
         productA = insertProduct("结算桩商品·甲", category.getId(), 1200L, 10);
         productB = insertProduct("结算桩商品·乙", category.getId(), 3450L, 10);
+        productC = insertProduct("结算桩商品·丙", category.getId(), 500L, 10);
 
         mockMvc.perform(post("/buyer/register")
                         .param("username", BUYER)
@@ -202,6 +230,64 @@ class CartCheckoutStubTest {
 
         assertThat(cartMapper.selectById(checkoutId)).as("已结算的条目应被移除").isNull();
         assertThat(cartMapper.selectById(keepId)).as("未勾选的条目应保留").isNotNull();
+    }
+
+    // ==================================================================
+    // 转收藏：两个数必须分开报（周到 11-16 反馈的文案口径）
+    // ==================================================================
+
+    @Test
+    @DisplayName("转收藏：勾 3 件、其中 2 件已收藏 → 提示「移出 3 件、新增 1 件」")
+    void 转收藏分别回报移出数与新增数() throws Exception {
+        Cookie cookie = loginCookie(BUYER);
+        for (Long id : List.of(productA, productB, productC)) {
+            mockMvc.perform(post("/cart/add").cookie(cookie)
+                    .param("productId", String.valueOf(id)).param("quantity", "1"))
+                    .andExpect(status().isFound());
+        }
+        assertThat(cartMapper.countByBuyer(buyerId)).isEqualTo(3L);
+
+        StubFavoritePort stub = (StubFavoritePort) favoritePort;
+        stub.addedOnNextCall = 1;   // 3 件里有 2 件此前已收藏
+
+        MvcResult result = mockMvc.perform(post("/cart/to-favorites").cookie(cookie))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrlPattern("/cart?msg=*"))
+                .andReturn();
+
+        String msg = URLDecoder.decode(result.getResponse().getRedirectedUrl(), StandardCharsets.UTF_8);
+        assertThat(msg)
+                .as("移出数应等于勾选条数 3，收藏新增 1，两个数不能混成一个")
+                .contains("已移出购物车 3 件")
+                .contains("收藏新增 1 件");
+
+        assertThat(stub.calls).hasSize(1);
+        assertThat(stub.calls.get(0))
+                .as("三件商品都应交给收藏域（由它幂等去重）")
+                .containsExactlyInAnyOrder(productA, productB, productC);
+
+        assertThat(cartMapper.countByBuyer(buyerId))
+                .as("按「移动」口径：即使此前已收藏，也要移出购物车").isZero();
+    }
+
+    @Test
+    @DisplayName("转收藏：全部此前已收藏 → 提示「此前已收藏」而不是「新增 0 件」")
+    void 转收藏全部已收藏时文案准确() throws Exception {
+        Cookie cookie = loginCookie(BUYER);
+        mockMvc.perform(post("/cart/add").cookie(cookie)
+                .param("productId", String.valueOf(productA)).param("quantity", "1"))
+                .andExpect(status().isFound());
+
+        ((StubFavoritePort) favoritePort).addedOnNextCall = 0;
+
+        MvcResult result = mockMvc.perform(post("/cart/to-favorites").cookie(cookie))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrlPattern("/cart?msg=*"))
+                .andReturn();
+
+        String msg = URLDecoder.decode(result.getResponse().getRedirectedUrl(), StandardCharsets.UTF_8);
+        assertThat(msg).contains("已移出购物车 1 件").contains("此前已收藏");
+        assertThat(cartMapper.countByBuyer(buyerId)).isZero();
     }
 
     // ==================================================================

@@ -5,6 +5,7 @@ import com.group5.shop.buyer.domain.Buyer;
 import com.group5.shop.cart.domain.Cart;
 import com.group5.shop.cart.port.OrderCreatePort;
 import com.group5.shop.cart.service.CartService;
+import com.group5.shop.cart.service.FavoriteMoveResult;
 import com.group5.shop.common.exception.BusinessException;
 import com.group5.shop.common.util.MoneyUtils;
 import org.springframework.stereotype.Controller;
@@ -151,8 +152,12 @@ public class CartController {
             return redirectToLogin("/cart");
         }
         try {
-            int added = cartService.moveToFavorites(buyer.getId(), cartIds);
-            return "redirect:/cart?msg=" + encode("已转收藏 " + added + " 件（已收藏过的自动跳过）");
+            FavoriteMoveResult moved = cartService.moveToFavorites(buyer.getId(), cartIds);
+            // 两个数分开报：移出的是勾选行，收藏侧可能因「已收藏」而幂等跳过
+            String msg = moved.allAlreadyFavorited()
+                    ? "已移出购物车 " + moved.movedOut() + " 件，这些商品此前已收藏"
+                    : "已移出购物车 " + moved.movedOut() + " 件，收藏新增 " + moved.favoriteAdded() + " 件";
+            return "redirect:/cart?msg=" + encode(msg);
         } catch (BusinessException e) {
             return "redirect:/cart?error=" + encode(e.getMessage());
         }

@@ -107,7 +107,9 @@ class CartTest {
         assertThat(categories).as("schema 应已写入种子分类").isNotEmpty();
         Long categoryId = categories.get(0).getId();
 
-        productOnSale = insertProduct("购物车测试商品·在售", categoryId, 1990L, 10, ProductStatus.ON_SALE);
+        // 库存给足 200：本类要验证「单条上限 99」，库存若只有 10 会先被库存规则拦下，
+        // 上限用例就测不到了。库存边界的用例另建低库存商品（见下方两个用例）
+        productOnSale = insertProduct("购物车测试商品·在售", categoryId, 1990L, 200, ProductStatus.ON_SALE);
         productOffShelf = insertProduct("购物车测试商品·已下架", categoryId, 2990L, 10, ProductStatus.DELISTED);
 
         buyerAId = register(BUYER_A, "13900001111", "图书馆门口");
@@ -298,9 +300,25 @@ class CartTest {
 
     @Test
     @Order(11)
-    @DisplayName("结算：下不了单时回到购物车并保留条目，不整车清空")
+    @DisplayName("结算：这件下不成时回到购物车并保留条目，不整车清空")
     void 结算失败时不清空购物车() throws Exception {
-        // 车里是 99 件、库存只有 10 件：这一件必然下不成（逐件拦截，不整单成功也不整单丢货）
+        // 自成一体，不依赖前面用例在车里留下的东西：
+        // 先清空，再放一件「结算前被别人买光」的商品
+        cartMapper.deleteByBuyer(buyerAId);
+        Long product = insertProduct("购物车测试商品·会被抢光",
+                categoryMapper.selectEnabled().get(0).getId(), 660L, 5, ProductStatus.ON_SALE);
+
+        mockMvc.perform(post("/cart/add").cookie(loginCookie(BUYER_A))
+                        .param("productId", String.valueOf(product))
+                        .param("quantity", "5"))
+                .andExpect(status().isFound());
+
+        // 模拟并发：另一笔订单在结算前把库存买光（库存归零 → 自动下架）
+        Product depleted = productMapper.selectById(product);
+        depleted.setStock(0);
+        depleted.setStatus(ProductStatus.DELISTED);
+        productMapper.updateById(depleted);
+
         long before = cartMapper.countByBuyer(buyerAId);
         assertThat(before).isPositive();
 
@@ -350,6 +368,48 @@ class CartTest {
                 .andExpect(redirectedUrlPattern("/cart?msg=*"));
 
         assertThat(cartMapper.selectById(row.getId())).as("移除后应查不到该行").isNull();
+    }
+
+    // ==================================================================
+    // 5. 库存边界（B 新增：数量不许超过当前库存）
+    // ==================================================================
+
+    @Test
+    @Order(14)
+    @DisplayName("库存边界：加购数量超过库存被拒，且不落库")
+    void 加购超过库存被拒绝() throws Exception {
+        Long lowStock = insertProduct("购物车测试商品·库存5",
+                categoryMapper.selectEnabled().get(0).getId(), 800L, 5, ProductStatus.ON_SALE);
+
+        mockMvc.perform(post("/cart/add").cookie(loginCookie(BUYER_A))
+                        .param("productId", String.valueOf(lowStock))
+                        .param("quantity", "6"))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrlPattern("/products/" + lowStock + "?error=*"));
+
+        assertThat(cartMapper.selectByBuyerAndProduct(buyerAId, lowStock))
+                .as("超过库存的加购不得落库").isNull();
+    }
+
+    @Test
+    @Order(15)
+    @DisplayName("库存边界：改数量超过库存被拒，原数量不变")
+    void 改数量超过库存被拒绝() throws Exception {
+        Long lowStock = insertProduct("购物车测试商品·库存3",
+                categoryMapper.selectEnabled().get(0).getId(), 900L, 3, ProductStatus.ON_SALE);
+        mockMvc.perform(post("/cart/add").cookie(loginCookie(BUYER_A))
+                        .param("productId", String.valueOf(lowStock))
+                        .param("quantity", "2"))
+                .andExpect(status().isFound());
+
+        Long cartId = cartMapper.selectByBuyerAndProduct(buyerAId, lowStock).getId();
+        mockMvc.perform(post("/cart/" + cartId + "/quantity").cookie(loginCookie(BUYER_A))
+                        .param("quantity", "4"))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrlPattern("/cart?error=*"));
+
+        assertThat(cartMapper.selectById(cartId).getQuantity())
+                .as("改数量被库存规则拒绝后，原数量不能变").isEqualTo(2);
     }
 
     // ==================================================================
