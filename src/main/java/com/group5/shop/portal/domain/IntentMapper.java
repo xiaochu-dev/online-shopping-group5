@@ -41,14 +41,29 @@ public interface IntentMapper extends BaseMapper<Intent> {
     String FINISHED_STATUSES = "('completed', 'cancelled')";
 
     /**
+     * 「这张订单里含某商品」的判定（B.2.3 一张单可含多件）。
+     *
+     * <p>不能只看 {@code intent.product_id}：那一列是迭代 1 的单值遗留，多件下单时只存首件，
+     * 于是「算法导论 + 机械键盘」一起结算的单，在机械键盘的订单页里查不到。
+     * 所以先认明细 {@code order_item}，再用 {@code product_id} 兜住没有明细的老意向单。</p>
+     */
+    String CONTAINS_PRODUCT = "(product_id = #{productId} OR EXISTS ("
+            + "SELECT 1 FROM order_item oi WHERE oi.intent_id = intent.id "
+            + "AND oi.product_id = #{productId}))";
+
+    /**
      * 某商品的订单列表，可按状态筛选（T4-04 卖家页）。
+     *
+     * <p>口径是「<b>含</b>该商品的订单」，不是「首件商品正好是该商品的订单」——
+     * 见 {@link #CONTAINS_PRODUCT}。多件订单因此在每个相关商品的页面都能查到，
+     * 但仍是<b>同一张单</b>（同一个订单号、同一套状态）。</p>
      *
      * @param productId 商品 id
      * @param status    状态值；null / 空串表示不筛选
      * @return 按下单时间倒序；无数据返回空列表
      */
     @Select("SELECT " + COLUMNS + " FROM intent "
-            + "WHERE product_id = #{productId} "
+            + "WHERE " + CONTAINS_PRODUCT + " "
             + "AND (#{status} IS NULL OR #{status} = '' OR status = #{status}) "
             + "ORDER BY created_at DESC, id DESC")
     List<Intent> selectByProduct(@Param("productId") Long productId,
@@ -57,24 +72,28 @@ public interface IntentMapper extends BaseMapper<Intent> {
     /**
      * 某商品<b>未结束</b>的订单（created / confirmed / prepared / shipped）。
      *
-     * <p>商品域用它判断「这个商品还有没有在途订单」（如库存调 0 前的保护）。</p>
+     * <p>商品域用它判断「这个商品还有没有在途订单」（如库存调 0 前的保护）。
+     * 同样按「含该商品」判定，否则多件订单里的非首件商品会被当成没有在途单。</p>
      *
      * @param productId 商品 id
      * @return 按下单时间正序
      */
     @Select("SELECT " + COLUMNS + " FROM intent "
-            + "WHERE product_id = #{productId} AND status IN " + ACTIVE_STATUSES + " "
+            + "WHERE " + CONTAINS_PRODUCT + " AND status IN " + ACTIVE_STATUSES + " "
             + "ORDER BY created_at ASC, id ASC")
     List<Intent> selectActiveByProduct(@Param("productId") Long productId);
 
     /**
      * 某商品的订单数按状态分组（筛选标签计数）。
      *
+     * <p>与 {@link #selectByProduct} 同一口径，否则会出现「列表里有 1 张单、
+     * 标签上写 0 张」的自相矛盾。</p>
+     *
      * @param productId 商品 id
      * @return 每行含 {@code status} 与 {@code cnt}
      */
     @Select("SELECT status, COUNT(*) AS cnt FROM intent "
-            + "WHERE product_id = #{productId} GROUP BY status")
+            + "WHERE " + CONTAINS_PRODUCT + " GROUP BY status")
     List<Map<String, Object>> countByProductGroupByStatus(@Param("productId") Long productId);
 
     /**
@@ -142,10 +161,21 @@ public interface IntentMapper extends BaseMapper<Intent> {
     /**
      * 按商品统计未结束订单数（卖家「我的商品」列表上的角标）。
      *
+     * <p>多件订单会给它含的<b>每个</b>商品各记 1 条——卖家在机械键盘那行也该看到
+     * 「有 1 张单在途」，哪怕这张单的首件商品是算法导论。没有明细的老意向单按
+     * {@code intent.product_id} 记 1 条，两者用 {@code UNION} 合并去重。</p>
+     *
      * @return 每行含 {@code product_id} 与 {@code cnt}
      */
-    @Select("SELECT product_id, COUNT(*) AS cnt FROM intent "
-            + "WHERE status IN " + ACTIVE_STATUSES + " GROUP BY product_id")
+    @Select("SELECT product_id, COUNT(*) AS cnt FROM ("
+            + "SELECT i.id AS intent_id, oi.product_id AS product_id FROM intent i "
+            + "JOIN order_item oi ON oi.intent_id = i.id "
+            + "WHERE i.status IN " + ACTIVE_STATUSES + " "
+            + "UNION "
+            + "SELECT i.id AS intent_id, i.product_id AS product_id FROM intent i "
+            + "WHERE i.status IN " + ACTIVE_STATUSES + " "
+            + "AND NOT EXISTS (SELECT 1 FROM order_item oi2 WHERE oi2.intent_id = i.id)"
+            + ") GROUP BY product_id")
     List<Map<String, Object>> countActiveGroupByProduct();
 
     /**

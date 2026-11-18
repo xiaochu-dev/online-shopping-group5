@@ -29,10 +29,12 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrlPattern;
@@ -208,6 +210,57 @@ class CartEndToEndTest {
 
         assertThat(productMapper.selectById(productId).getStock())
                 .as("重复取消绝不能把库存越补越多").isEqualTo(3);
+    }
+
+    // ==================================================================
+    // 三、多件订单的卖家可见性：同一张单在它涉及的每个商品页都能看到
+    // ==================================================================
+
+    @Test
+    @DisplayName("两件商品一起结算是一张单；卖家在两个商品页都看得到，且只把本商品列为主行")
+    void 多件订单在每个相关商品页都能被卖家看到() throws Exception {
+        Long book = insertProduct("E2E 商品·书", 1000L, 5);
+        Long keyboard = insertProduct("E2E 商品·键盘", 2000L, 5);
+        Cookie cookie = loginCookie(BUYER);
+
+        mockMvc.perform(post("/cart/add").cookie(cookie)
+                .param("productId", String.valueOf(book)).param("quantity", "2"))
+                .andExpect(status().isFound());
+        mockMvc.perform(post("/cart/add").cookie(cookie)
+                .param("productId", String.valueOf(keyboard)).param("quantity", "1"))
+                .andExpect(status().isFound());
+        mockMvc.perform(post("/cart/checkout").cookie(cookie))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrlPattern("/my/orders?msg=*"));
+
+        Intent order = latestOrder();
+        assertThat(orderLineMapper.selectByIntentId(order.getId()))
+                .as("一次结算 = 一张单两条明细，不是两张单").hasSize(2);
+
+        MockHttpSession sellerSession = loginSeller();
+
+        String onBook = mockMvc.perform(get("/admin/intents/" + book).session(sellerSession))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        assertThat(onBook).contains(order.getOrderNo());
+        assertThat(onBook).contains("E2E 商品·书 ×2");
+        assertThat(onBook).contains("还含 E2E 商品·键盘 ×1");
+
+        // 关键回归：非首件商品的订单页也必须有这张单。
+        // 旧实现按 intent.product_id 过滤，这里会是一条空列表。
+        String onKeyboard = mockMvc.perform(get("/admin/intents/" + keyboard).session(sellerSession))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        assertThat(onKeyboard).contains(order.getOrderNo());
+        assertThat(onKeyboard).contains("E2E 商品·键盘 ×1");
+        assertThat(onKeyboard).contains("还含 E2E 商品·书 ×2");
+
+        // 从键盘页推进：回跳仍在键盘页，整单状态同步（一张单只有一个状态）
+        mockMvc.perform(post("/admin/intents/" + order.getId() + "/advance").session(sellerSession)
+                        .param("productId", String.valueOf(keyboard)))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern("/admin/intents/" + keyboard + "?msg=*"));
+        assertThat(intentMapper.selectById(order.getId()).getStatus()).isEqualTo(IntentStatus.CONFIRMED);
     }
 
     // ==================================================================

@@ -77,6 +77,13 @@ public class SellerIntentService {
     /**
      * 某商品的订单列表，可按状态筛选（B.1.1「页面上能按状态筛选」）。
      *
+     * <p>口径是「<b>含</b>该商品的订单」：B.2.3 起一张单可以有多件商品，购物车一起结算时
+     * 它们本来就在同一张单里（澄清 Q3：不拆单）。所以多件订单会同时出现在它涉及的
+     * 每个商品的订单页上，但订单号、状态、发货动作都是<b>同一张单</b>。</p>
+     *
+     * <p>每行都打上 {@code focusProductId}，页面据此只展示「本商品」那一行明细，
+     * 其余商品折叠成「还含：…」，避免卖家在机械键盘页看到「算法导论 ×2」以为串了商品。</p>
+     *
      * <p>不再按提交时间正序排「队」，而是按下单时间<b>倒序</b>：订单列表的常规读法，
      * 最新的在最上面。已取消与已完成的单也保留在列表里，否则商家查不到历史。</p>
      *
@@ -87,6 +94,9 @@ public class SellerIntentService {
     public List<Intent> ordersOfProduct(Long productId, String status) {
         List<Intent> orders = intentMapper.selectByProduct(productId, status);
         attachLines(orders);
+        for (Intent order : orders) {
+            order.setFocusProductId(productId);
+        }
         return orders;
     }
 

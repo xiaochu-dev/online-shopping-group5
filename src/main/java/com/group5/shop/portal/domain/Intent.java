@@ -5,8 +5,10 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.group5.shop.common.constant.IntentStatus;
+import com.group5.shop.common.util.MoneyUtils;
 import com.group5.shop.common.util.TimeUtils;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -87,24 +89,23 @@ public class Intent {
     @TableField(exist = false)
     private List<OrderLine> lines;
 
+    /**
+     * 卖家从哪个商品的订单页看这张单（<b>非表字段</b>）。
+     *
+     * <p>一张多件订单在每个相关商品的页面都会出现，页面上「本商品」那一列要显示
+     * <b>这个商品</b>的明细，而不是首件商品的明细——否则卖家在机械键盘页看到
+     * 「算法导论 ×2」会以为商品串了。</p>
+     */
+    @TableField(exist = false)
+    private Long focusProductId;
+
     // ------------------------------------------------------------------
     // 页面便捷方法
     // ------------------------------------------------------------------
 
     /** 订单明细摘要，如「机械键盘 ×2、教材 ×1」；无明细返回空串（老单） */
     public String getItemsText() {
-        if (lines == null || lines.isEmpty()) {
-            return "";
-        }
-        StringBuilder text = new StringBuilder();
-        for (OrderLine line : lines) {
-            if (!text.isEmpty()) {
-                text.append('、');
-            }
-            text.append(line.getProductName() == null ? "商品" : line.getProductName())
-                    .append(" ×").append(line.getQuantity() == null ? 0 : line.getQuantity());
-        }
-        return text.toString();
+        return joinLines(lines);
     }
 
     /** 订单件数合计（明细缺失时按 1 件算，兼容老意向单） */
@@ -122,6 +123,101 @@ public class Intent {
     /** 是否是多件订单（页面据此决定要不要展开明细） */
     public boolean isMultiLine() {
         return lines != null && lines.size() > 1;
+    }
+
+    // ------------------------------------------------------------------
+    // 卖家页「本商品」视角（一张多件订单会在多个商品页出现）
+    // ------------------------------------------------------------------
+
+    /**
+     * 当前商品在本单内的明细行。
+     *
+     * <p>没设 {@link #focusProductId}，或这张单里没有该商品（老单无明细）时，
+     * 退回整单明细——页面至少不会空着。</p>
+     *
+     * @return 明细行，永不为 null
+     */
+    public List<OrderLine> getFocusLines() {
+        if (lines == null || lines.isEmpty()) {
+            return List.of();
+        }
+        if (focusProductId == null) {
+            return lines;
+        }
+        List<OrderLine> hit = new ArrayList<>(2);
+        for (OrderLine line : lines) {
+            if (focusProductId.equals(line.getProductId())) {
+                hit.add(line);
+            }
+        }
+        return hit.isEmpty() ? lines : hit;
+    }
+
+    /** 本商品明细摘要，如「算法导论 ×2」 */
+    public String getFocusItemsText() {
+        return joinLines(getFocusLines());
+    }
+
+    /**
+     * 本单里<b>其它</b>商品的摘要，如「机械键盘 ×1」。
+     *
+     * <p>为空表示这单只有本商品，页面不显示「还含」那行。</p>
+     */
+    public String getOtherItemsText() {
+        if (lines == null || lines.isEmpty() || focusProductId == null) {
+            return "";
+        }
+        List<OrderLine> others = new ArrayList<>(2);
+        for (OrderLine line : lines) {
+            if (!focusProductId.equals(line.getProductId())) {
+                others.add(line);
+            }
+        }
+        return joinLines(others);
+    }
+
+    /** 本商品在单内的件数 */
+    public int getFocusQuantity() {
+        List<OrderLine> focus = getFocusLines();
+        if (focus.isEmpty()) {
+            return getTotalQuantity();
+        }
+        int total = 0;
+        for (OrderLine line : focus) {
+            total += line.getQuantity() == null ? 0 : line.getQuantity();
+        }
+        return total;
+    }
+
+    /** 整单金额（元），如 {@code 375.00} */
+    public String getTotalAmountText() {
+        return MoneyUtils.centsToYuan(totalAmountCents());
+    }
+
+    private long totalAmountCents() {
+        if (lines == null || lines.isEmpty()) {
+            return 0L;
+        }
+        long total = 0L;
+        for (OrderLine line : lines) {
+            total += line.subtotalCents();
+        }
+        return total;
+    }
+
+    private String joinLines(List<OrderLine> source) {
+        if (source == null || source.isEmpty()) {
+            return "";
+        }
+        StringBuilder text = new StringBuilder();
+        for (OrderLine line : source) {
+            if (!text.isEmpty()) {
+                text.append('、');
+            }
+            text.append(line.getProductName() == null ? "商品" : line.getProductName())
+                    .append(" ×").append(line.getQuantity() == null ? 0 : line.getQuantity());
+        }
+        return text.toString();
     }
 
     /** 供页面直接使用：{@code ${i.statusLabel}} */
@@ -329,5 +425,13 @@ public class Intent {
 
     public void setLines(List<OrderLine> lines) {
         this.lines = lines;
+    }
+
+    public Long getFocusProductId() {
+        return focusProductId;
+    }
+
+    public void setFocusProductId(Long focusProductId) {
+        this.focusProductId = focusProductId;
     }
 }

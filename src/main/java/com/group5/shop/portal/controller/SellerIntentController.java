@@ -107,12 +107,21 @@ public class SellerIntentController {
     // 两个动作
     // ==================================================================
 
-    /** 推进一步：created → confirmed → prepared → shipped → completed */
+    /**
+     * 推进一步：created → confirmed → prepared → shipped → completed
+     *
+     * <p>{@code productId} 是卖家<b>当前所在的商品页</b>，用来「从哪来回哪去」：
+     * 多件订单在它涉及的每个商品页都能看到，在机械键盘页点确认后不该被甩到算法导论页。
+     * 缺省时回落到订单首件商品。</p>
+     */
     @PostMapping("/admin/intents/{intentId}/advance")
-    public String advance(@PathVariable("intentId") Long intentId) {
+    public String advance(@PathVariable("intentId") Long intentId,
+                          @RequestParam(value = "productId", required = false) Long productId,
+                          @RequestParam(value = "status", required = false) String status) {
         Long sellerId = sellerContext.currentId();
-        Long productId = sellerIntentService.productIdOf(intentId);
-        return act(productId, () -> orderStatusService.advance(intentId, sellerId),
+        Long target = productId != null ? productId : sellerIntentService.productIdOf(intentId);
+        return act(target, normalizeStatus(status),
+                () -> orderStatusService.advance(intentId, sellerId),
                 "ok", "已推进到「%s」");
     }
 
@@ -123,10 +132,13 @@ public class SellerIntentController {
      */
     @PostMapping("/admin/intents/{intentId}/cancel")
     public String cancel(@PathVariable("intentId") Long intentId,
-                         @RequestParam(value = "reason", required = false) String reason) {
+                         @RequestParam(value = "reason", required = false) String reason,
+                         @RequestParam(value = "productId", required = false) Long productId,
+                         @RequestParam(value = "status", required = false) String status) {
         Long sellerId = sellerContext.currentId();
-        Long productId = sellerIntentService.productIdOf(intentId);
-        return act(productId, () -> orderStatusService.cancelBySeller(intentId, sellerId, reason),
+        Long target = productId != null ? productId : sellerIntentService.productIdOf(intentId);
+        return act(target, normalizeStatus(status),
+                () -> orderStatusService.cancelBySeller(intentId, sellerId, reason),
                 "已取消该订单，库存已回补", null);
     }
 
@@ -142,18 +154,18 @@ public class SellerIntentController {
      *
      * <p>{@code messageTemplate} 含 {@code %s} 时用动作后的状态中文名填充。</p>
      */
-    private String act(Long productId, Supplier<Intent> action, String successMessage,
+    private String act(Long productId, String status, Supplier<Intent> action, String successMessage,
                        String messageTemplate) {
         Intent after;
         try {
             after = action.get();
         } catch (BusinessException e) {
-            return backTo(productId, null, "error", e.getMessage());
+            return backTo(productId, status, "error", e.getMessage());
         }
         String message = messageTemplate == null
                 ? successMessage
                 : String.format(messageTemplate, IntentStatus.labelOf(after.getStatus()));
-        return backTo(productId, null, "msg", message);
+        return backTo(productId, status, "msg", message);
     }
 
     private String backTo(Long productId, String status, String key, String text) {

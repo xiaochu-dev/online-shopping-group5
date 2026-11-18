@@ -22,7 +22,10 @@
                     <span class="price" th:text="'¥ ' + ${product.priceYuan}">¥ 0.00</span>
                     <span class="tag" th:classappend="${product.statusCss}" th:text="${product.statusLabel}">在售</span>
                 </p>
-                <p class="muted">共 <b th:text="${orders.size()}">0</b> 张订单（当前筛选）</p>
+                <p class="muted">
+                    共 <b th:text="${orders.size()}">0</b> 张订单（当前筛选）　·
+                    一张订单可能含多件商品，这里列出的是<b>含「<span th:text="${product.name}">商品</span>」</b>的全部订单
+                </p>
             </div>
         </div>
     </div>
@@ -76,8 +79,9 @@
         <table class="table">
             <thead>
             <tr>
+                <th>订单号</th>
                 <th>买家</th>
-                <th>商品 / 件数</th>
+                <th>本商品 / 件数</th>
                 <th>联系电话</th>
                 <th>交易地点</th>
                 <th>下单时间</th>
@@ -87,11 +91,20 @@
             </thead>
             <tbody>
             <tr th:each="row : ${orders}">
+                <td class="muted" th:text="${row.orderNo} ?: '—'">SO20261118000001</td>
                 <td th:text="${row.buyerName}">买家</td>
                 <td>
-                    <!-- B.2.3 起一张订单可含多件：明细为空的只有老意向单，回落到「—」 -->
-                    <div th:text="${row.itemsText} ?: '—'">商品</div>
-                    <div class="muted" th:text="'共 ' + ${row.totalQuantity} + ' 件'">共 1 件</div>
+                    <!-- 只显示「本商品」在单内的明细；其余商品折到下一行，注明是同一张单 -->
+                    <div th:text="${row.focusItemsText} ?: '—'">算法导论 ×2</div>
+                    <div class="muted"
+                         th:text="'本商品 ' + ${row.focusQuantity} + ' 件 · 整单 ' + ${row.totalQuantity} + ' 件 · 合计 ¥' + ${row.totalAmountText}">
+                        本商品 2 件 · 整单 3 件 · 合计 ¥375.00
+                    </div>
+                    <div class="muted"
+                         th:if="${!#strings.isEmpty(row.otherItemsText)}"
+                         th:text="'还含 ' + ${row.otherItemsText} + '（同一张单，一起发货）'">
+                        还含 机械键盘 ×1（同一张单，一起发货）
+                    </div>
                 </td>
                 <td th:text="${row.phone}">电话</td>
                 <td class="muted" th:text="${row.tradeAddress} ?: '（未填）'">地点</td>
@@ -109,21 +122,31 @@
                         <form th:if="${row.status == 'created'}"
                               method="post" th:action="@{'/admin/intents/' + ${row.id} + '/advance'}"
                               class="inline-form">
+                            <!-- 回跳用：从哪个商品页进来的回哪个页，状态筛选也带着 -->
+                            <input type="hidden" name="productId" th:value="${product.id}">
+                            <input type="hidden" name="status" th:value="${statusFilter}">
                             <button type="submit" class="btn btn-sm btn-primary">确认订单</button>
                         </form>
                         <form th:if="${row.status == 'confirmed'}"
                               method="post" th:action="@{'/admin/intents/' + ${row.id} + '/advance'}"
                               class="inline-form">
+                            <!-- 回跳用：从哪个商品页进来的回哪个页，状态筛选也带着 -->
+                            <input type="hidden" name="productId" th:value="${product.id}">
+                            <input type="hidden" name="status" th:value="${statusFilter}">
                             <button type="submit" class="btn btn-sm btn-primary">备货完成</button>
                         </form>
                         <form th:if="${row.status == 'prepared'}"
                               method="post" th:action="@{'/admin/intents/' + ${row.id} + '/advance'}"
                               class="inline-form">
+                            <input type="hidden" name="productId" th:value="${product.id}">
+                            <input type="hidden" name="status" th:value="${statusFilter}">
                             <button type="submit" class="btn btn-sm btn-primary">开始发货</button>
                         </form>
                         <form th:if="${row.status == 'shipped'}"
                               method="post" th:action="@{'/admin/intents/' + ${row.id} + '/advance'}"
                               class="inline-form">
+                            <input type="hidden" name="productId" th:value="${product.id}">
+                            <input type="hidden" name="status" th:value="${statusFilter}">
                             <button type="submit" class="btn btn-sm btn-success">交易完成</button>
                         </form>
 
@@ -132,6 +155,8 @@
                               method="post" th:action="@{'/admin/intents/' + ${row.id} + '/cancel'}"
                               class="inline-form"
                               onsubmit="return confirm('确定取消这张订单吗？取消后库存会回补，且不可恢复。');">
+                            <input type="hidden" name="productId" th:value="${product.id}">
+                            <input type="hidden" name="status" th:value="${statusFilter}">
                             <input type="text" name="reason" placeholder="取消原因（可空）" style="min-width:130px;">
                             <button type="submit" class="btn btn-sm btn-danger">取消订单</button>
                         </form>
