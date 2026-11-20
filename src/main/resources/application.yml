@@ -48,7 +48,8 @@ spring:
   #   04-payment 模拟支付与订单状态机（第 5 组 · 支付模块）
   #   05-cart 购物车（胡成溯，挑战需求 B.2.2 / B.2.3）
   #   06-favorite 收藏（黄程宇，挑战需求 B.2.1 / B.2.4）
-  # 购物车、收藏均依赖买家和商品表。
+  #   07-shipping 配送（胡成溯，挑战需求 C.2：地址簿 + 发货记录）
+  # 购物车、收藏、配送均依赖买家和订单表。
   # ------------------------------------------------------------------
   sql:
     init:
@@ -61,6 +62,7 @@ spring:
         - classpath:schema/04-payment.sql
         - classpath:schema/05-cart.sql
         - classpath:schema/06-favorite.sql
+        - classpath:schema/07-shipping.sql
       encoding: UTF-8
       continue-on-error: false
 

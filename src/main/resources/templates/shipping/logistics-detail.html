@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<!-- 物流轨迹详情 —— 挑战需求 C.2.4（负责人：胡成溯） -->
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{portal/fragments :: head('物流轨迹')}"></head>
+<body>
+<div th:replace="~{portal/fragments :: buyerTopbar('logistics')}"></div>
+
+<div class="container">
+
+    <h2>物流轨迹</h2>
+
+    <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:baseline;">
+            <div>
+                <div class="muted">订单号</div>
+                <div th:text="${detail.orderNo}" style="font-weight:600;">SO20261120000001</div>
+            </div>
+            <span class="tag tag-blue" th:text="${detail.statusText}">运输中</span>
+        </div>
+
+        <table class="table" style="margin-top:14px;">
+            <tbody>
+            <tr>
+                <th style="width:110px;">商品</th>
+                <td th:text="${detail.itemsText}">机械键盘 ×1</td>
+            </tr>
+            <tr>
+                <th>收货信息</th>
+                <td>
+                    <span th:text="${detail.buyerName}">买家</span>　
+                    <span th:text="${detail.phone}">13800000000</span><br>
+                    <span class="muted" th:text="${detail.address}">浙江省杭州市西湖区文一西路 18 号</span>
+                </td>
+            </tr>
+            <tr>
+                <th>承运商</th>
+                <td th:text="${detail.carrierLabel}">顺丰速运</td>
+            </tr>
+            <tr>
+                <th>运单号</th>
+                <td th:text="${detail.trackingNo}">SF123456789</td>
+            </tr>
+            <tr>
+                <th>发货时间</th>
+                <td th:text="${detail.shippedAtText}">2026-11-20 15:30</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h3>物流轨迹</h3>
+        <p class="muted">
+            最近更新：<b th:text="${detail.latestTitle}">运输中</b>　
+            （轨迹按发货时间推算，未到达的节点显示为灰色）
+        </p>
+
+        <div th:each="e : ${events}"
+             th:style="${e.done} ? 'padding:12px 0 12px 14px; border-left:3px solid #1E5AA8; margin-left:2px;'
+                                      : 'padding:12px 0 12px 14px; border-left:3px solid #E5E7EB; margin-left:2px;'">
+            <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                <b th:text="${e.title}" th:style="${e.done} ? '' : 'color:#8B97A8;'">已揽收</b>
+                <span class="muted" th:text="${e.timeText}">11-20 15:30</span>
+            </div>
+            <div th:text="${e.detail}" th:style="${e.done} ? 'font-size:14px;' : 'font-size:14px; color:#8B97A8;'">
+                顺丰速运 已收件
+            </div>
+        </div>
+    </div>
+
+    <div class="action-block">
+        <a class="btn btn-sm" th:href="@{/my/logistics}">返回物流列表</a>
+        <a class="btn btn-sm" th:href="@{/my/orders}">我的订单</a>
+    </div>
+</div>
+</body>
+</html>

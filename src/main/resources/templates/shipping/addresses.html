@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<!-- 收货地址簿 —— 挑战需求 C.2.3（负责人：胡成溯） -->
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{portal/fragments :: head('收货地址')}"></head>
+<body>
+<div th:replace="~{portal/fragments :: buyerTopbar('addresses')}"></div>
+
+<div class="container">
+
+    <h2>收货地址</h2>
+
+    <div class="banner banner-ok" th:if="${param.msg}" th:text="${param.msg}">操作成功</div>
+    <div class="banner banner-error" th:if="${param.error}" th:text="${param.error}">操作失败</div>
+
+    <div class="card">
+        <p class="muted">
+            可以保存多个收货地址，其中<b>一个作为默认</b>；下单时使用的交易地点就是默认地址。
+            当前默认：
+            <b th:text="${defaultAddressText != null ? defaultAddressText : '尚未设置'}">尚未设置</b>
+        </p>
+        <p class="muted" th:if="${addresses.isEmpty()}">
+            还没有收货地址。填一个，下单时就不用每次重输地点了。
+        </p>
+    </div>
+
+    <!-- 地址列表：一张卡片一个地址，编辑/设默认/删除各用独立表单（不嵌套） -->
+    <div class="card" th:each="a : ${addresses}" th:style="${a.defaulted()} ? 'border-left:3px solid #1E5AA8;' : ''">
+        <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px;">
+            <div>
+                <b th:text="${a.receiver}">收货人</b>
+                <span class="muted" th:text="${a.phone}">电话</span>
+                <span class="tag tag-blue" th:if="${a.defaulted()}">默认地址</span>
+            </div>
+            <div class="muted" th:text="'最近修改：' + ${a.updatedAtText()}">最近修改</div>
+        </div>
+
+        <form method="post" th:action="@{'/my/addresses/' + ${a.id} + '/update'}">
+            <div class="form-row">
+                <label>收货人
+                    <input type="text" name="receiver" th:value="${a.receiver}" maxlength="20" required>
+                </label>
+                <label>联系电话
+                    <input type="text" name="phone" th:value="${a.phone}" maxlength="20" required>
+                </label>
+            </div>
+            <div class="form-row">
+                <label>省市区
+                    <input type="text" name="region" th:value="${a.region}" maxlength="60" required>
+                </label>
+                <label>详细地址
+                    <input type="text" name="detail" th:value="${a.detail}" maxlength="100" required>
+                </label>
+            </div>
+            <div class="action-block">
+                <button type="submit" class="btn btn-primary btn-sm">保存修改</button>
+            </div>
+        </form>
+
+        <div class="action-block" style="margin-top:6px;">
+            <form method="post" th:action="@{'/my/addresses/' + ${a.id} + '/default'}"
+                  th:if="${!a.defaulted()}">
+                <button type="submit" class="btn btn-sm">设为默认</button>
+            </form>
+            <form method="post" th:action="@{'/my/addresses/' + ${a.id} + '/delete'}"
+                  onsubmit="return confirm('确定删除这个地址？');">
+                <button type="submit" class="btn btn-sm btn-danger">删除</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 新增地址 -->
+    <div class="card">
+        <h3>新增地址</h3>
+        <form method="post" th:action="@{/my/addresses/add}">
+            <div class="form-row">
+                <label>收货人 <span class="req">*</span>
+                    <input type="text" name="receiver" maxlength="20" required placeholder="如：胡成溯">
+                </label>
+                <label>联系电话 <span class="req">*</span>
+                    <input type="text" name="phone" maxlength="20" required placeholder="如：13800000000">
+                </label>
+            </div>
+            <div class="form-row">
+                <label>省市区 <span class="req">*</span>
+                    <input type="text" name="region" maxlength="60" required placeholder="如：浙江省杭州市西湖区">
+                </label>
+                <label>详细地址 <span class="req">*</span>
+                    <input type="text" name="detail" maxlength="100" required placeholder="如：文一西路 18 号 3 幢 502">
+                </label>
+            </div>
+            <label style="display:block; margin:8px 0;">
+                <input type="checkbox" name="asDefault" value="1"> 设为默认地址
+            </label>
+            <div class="action-block">
+                <button type="submit" class="btn btn-primary">保存地址</button>
+                <a class="btn btn-sm" th:href="@{/}">返回商品列表</a>
+            </div>
+        </form>
+        <p class="muted">第一个地址会自动成为默认地址；默认地址会同步为下单时使用的交易地点。</p>
+    </div>
+</div>
+</body>
+</html>
