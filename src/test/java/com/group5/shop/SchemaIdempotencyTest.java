@@ -75,7 +75,8 @@ class SchemaIdempotencyTest {
                 "schema/03-intent.sql",
                 "schema/04-payment.sql",
                 "schema/05-cart.sql",
-                "schema/06-favorite.sql"
+                "schema/06-favorite.sql",
+                "schema/07-shipping.sql"
         };
         try (Connection connection = dataSource.getConnection()) {
             for (int round = 0; round < 2; round++) {
@@ -89,8 +90,9 @@ class SchemaIdempotencyTest {
         List<String> tables = jdbcTemplate.queryForList(
                 "SELECT name FROM sqlite_master WHERE type = 'table' "
                         + "AND name NOT LIKE 'sqlite_%' ORDER BY name", String.class);
-        assertEquals(List.of("buyer", "cart", "category", "favorite", "intent", "order_item", "payment",
-                "product", "product_image", "seller", "stock_restore"), tables);
+        assertEquals(List.of("buyer", "buyer_address", "cart", "category", "favorite", "intent",
+                "order_item", "payment", "product", "product_image", "seller", "shipment",
+                "stock_restore"), tables);
 
         // 2. 种子数据不重复插入
         assertEquals(1L, sellerMapper.selectCount(null), "卖家账号只能有一条");

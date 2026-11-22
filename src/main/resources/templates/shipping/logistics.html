@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<!-- 物流查询 —— 挑战需求 C.2.4（负责人：胡成溯） -->
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{portal/fragments :: head('物流查询')}"></head>
+<body>
+<div th:replace="~{portal/fragments :: buyerTopbar('logistics')}"></div>
+
+<div class="container">
+
+    <h2>物流查询</h2>
+
+    <div class="banner banner-error" th:if="${param.error}" th:text="${param.error}">查询失败</div>
+
+    <div class="card">
+        <p class="muted">
+            这里显示已发货的订单。承运商与运单号由卖家在发货时填写，轨迹按发货时间推算。
+        </p>
+    </div>
+
+    <div class="card empty-tip" th:if="${rows.isEmpty()}">
+        <p class="muted">还没有已发货的订单。订单发货后会自动出现在这里。</p>
+    </div>
+
+    <div class="card" th:if="${!rows.isEmpty()}">
+        <table class="table">
+            <thead>
+            <tr>
+                <th>订单号</th>
+                <th>商品</th>
+                <th>承运商</th>
+                <th>运单号</th>
+                <th>发货时间</th>
+                <th>当前状态</th>
+                <th style="width:110px;">操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="row : ${rows}">
+                <td th:text="${row.orderNo}">SO20261120000001</td>
+                <td th:text="${row.itemsText}">机械键盘 ×1</td>
+                <td th:text="${row.carrierLabel}">顺丰速运</td>
+                <td th:text="${row.trackingNo}">SF123456789</td>
+                <td th:text="${row.shippedAtText}">2026-11-20 15:30</td>
+                <td><span class="tag tag-blue" th:text="${row.statusText}">运输中</span></td>
+                <td>
+                    <a class="btn btn-sm" th:href="@{'/my/logistics/' + ${row.intentId}}">查看轨迹</a>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="action-block">
+        <a class="btn btn-sm" th:href="@{/my/orders}">返回我的订单</a>
+        <a class="btn btn-sm" th:href="@{/my/addresses}">管理收货地址</a>
+    </div>
+</div>
+</body>
+</html>
