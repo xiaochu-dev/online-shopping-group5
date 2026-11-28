@@ -66,6 +66,8 @@
                     <span class="muted" th:unless="${row.intent().isBuyerCancellable()}">
                         商家已开始发货，不能取消
                     </span>
+                    <th:block th:if="${row.intent().status == 'shipped'}"
+                              th:insert="~{after-sales/order-actions :: links(${row})}"></th:block>
                 </td>
             </tr>
             </tbody>
@@ -123,6 +125,8 @@
                               th:text="${row.intent().failReason}">取消原因</span>
                         <span th:if="${row.intent().tradeAddress != null and !row.intent().tradeAddress.isEmpty()}"
                               th:text="'交易地点：' + ${row.intent().tradeAddress}">交易地点</span>
+                        <th:block th:if="${row.intent().status == 'completed'}"
+                                  th:insert="~{after-sales/order-actions :: links(${row})}"></th:block>
                     </td>
                 </tr>
                 </tbody>

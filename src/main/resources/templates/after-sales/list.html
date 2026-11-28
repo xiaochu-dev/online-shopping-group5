@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{portal/fragments :: head(${sellerView ? '售后管理' : '我的售后'})}"></head>
+<body>
+<th:block th:if="${sellerView}">
+    <div th:replace="~{fragments/layout :: topbar('after-sales')}"></div>
+</th:block>
+<th:block th:unless="${sellerView}">
+    <div th:replace="~{portal/fragments :: buyerTopbar('after-sales')}"></div>
+</th:block>
+<main class="container">
+    <h2 th:text="${sellerView ? '售后管理' : '我的售后'}">售后</h2>
+    <p th:unless="${sellerView}">可在<a th:href="@{/my/orders}">我的订单</a>中为已发货或已完成的商品申请售后。</p>
+    <section class="card">
+        <p class="muted" th:if="${pageResult.total == 0}">暂无售后申请。</p>
+        <div style="overflow-x:auto" th:if="${pageResult.total > 0}">
+            <table class="table">
+                <thead>
+                <tr>
+                    <th scope="col">申请</th>
+                    <th scope="col">订单商品</th>
+                    <th scope="col" th:if="${sellerView}">买家</th>
+                    <th scope="col">提交时间</th>
+                    <th scope="col">处理进度</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="row : ${pageResult.records}">
+                    <td><a th:href="@{|${basePath}/${row.id()}|}" th:text="${row.title()}">查看申请</a></td>
+                    <td>
+                        <div th:text="${row.productName()}"></div>
+                        <span class="muted" th:text="${row.orderLabel()}"></span>
+                    </td>
+                    <td th:if="${sellerView}" th:text="${row.buyerName()}"></td>
+                    <td th:text="${row.createdAtText()}"></td>
+                    <td>
+                        <span class="tag" th:classappend="${row.resolvedAt() != null ? 'tag-green' : 'tag-gray'}"
+                              th:text="${row.stateLabel()}"></span>
+                        <span th:if="${row.outcome() != null}" th:text="${row.outcome().label()}"></span>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="pager" th:if="${pageResult.totalPages > 1}">
+            <a class="btn btn-sm" th:if="${pageResult.hasPrev}"
+               th:href="@{${basePath}(page=${pageResult.page - 1})}">上一页</a>
+            <span class="pager-info" th:text="'第 ' + ${pageResult.page} + ' / ' + ${pageResult.totalPages} + ' 页'"></span>
+            <a class="btn btn-sm" th:if="${pageResult.hasNext}"
+               th:href="@{${basePath}(page=${pageResult.page + 1})}">下一页</a>
+        </div>
+    </section>
+</main>
+</body>
+</html>

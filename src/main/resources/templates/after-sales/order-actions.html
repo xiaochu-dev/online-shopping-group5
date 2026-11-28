@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<body>
+<div th:fragment="links(row)">
+    <p th:if="${row.lines().isEmpty()}">
+        <a class="btn btn-sm"
+           th:href="@{/my/after-sales/new/{orderId}/{productId}(orderId=${row.intent().id},productId=${row.intent().productId})}">
+            申请／查看售后
+        </a>
+    </p>
+    <p th:each="line : ${row.lines()}">
+        <a class="btn btn-sm"
+           th:href="@{/my/after-sales/new/{orderId}/{productId}(orderId=${row.intent().id},productId=${line.productId})}"
+           th:text="${row.multiLine() ? '售后 · ' + line.productName : '申请／查看售后'}">申请／查看售后</a>
+    </p>
+</div>
+</body>
+</html>

@@ -33,6 +33,7 @@
              同样是挂一处链接，不改门户既有逻辑 -->
         <a th:href="@{/my/addresses}" th:classappend="${active == 'addresses'} ? 'nav-active' : ''">收货地址</a>
         <a th:href="@{/my/logistics}" th:classappend="${active == 'logistics'} ? 'nav-active' : ''">物流查询</a>
+        <a th:href="@{/my/after-sales}" th:classappend="${active == 'after-sales'} ? 'nav-active' : ''">我的售后</a>
         <!-- 未登录时不显示「我的订单」的登录态提示，登录入口由账号模块提供 -->
         <span class="muted" th:if="${buyerName}" th:text="'你好，' + ${buyerName}">你好</span>
         <a th:href="@{/buyer/me}" th:if="${buyerName}">我的账号</a>

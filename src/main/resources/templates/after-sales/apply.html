@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{portal/fragments :: head('申请售后')}"></head>
+<body>
+<div th:replace="~{portal/fragments :: buyerTopbar('after-sales')}"></div>
+<main class="container">
+    <a th:href="@{/my/orders}">返回我的订单</a>
+    <h2>申请售后</h2>
+    <section class="card">
+        <h3 th:text="${purchase.productName()}">订单商品</h3>
+        <p class="muted">
+            订单 <span th:text="${#strings.isEmpty(purchase.orderNo()) ? '#' + orderId : purchase.orderNo()}"></span>
+            · 购买 <span th:text="${purchase.quantity()}"></span> 件
+        </p>
+        <p class="banner banner-error" role="alert" th:if="${error}" th:text="${error}"></p>
+        <p class="banner banner-error" role="alert" th:if="${error == null and param.uploadError != null}">
+            售后图片过大，请选用不超过 5 MB 的图片后重新提交。
+        </p>
+        <form th:action="@{/my/after-sales/new/{orderId}/{productId}(orderId=${orderId},productId=${productId})}"
+              method="post" enctype="multipart/form-data">
+            <div class="form-row">
+                <label for="title">问题标题</label>
+                <input id="title" name="title" type="text" required maxlength="80" th:value="${title}">
+            </div>
+            <div class="form-row">
+                <label for="description">问题描述</label>
+                <textarea id="description" name="description" required maxlength="2000" rows="6"
+                          placeholder="描述商品问题、涉及的件数和你的处理诉求" th:text="${description}"></textarea>
+            </div>
+            <div class="form-row">
+                <label for="images">凭证图片（选填）</label>
+                <input id="images" name="images" type="file" multiple accept="image/jpeg,image/png"
+                       aria-describedby="images-help">
+                <p id="images-help" class="muted">最多 3 张 JPG 或 PNG，单张不超过 5 MB。</p>
+            </div>
+            <button class="btn btn-primary" type="submit">提交申请</button>
+        </form>
+    </section>
+</main>
+</body>
+</html>
