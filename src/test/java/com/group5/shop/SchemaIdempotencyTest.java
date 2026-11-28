@@ -76,7 +76,8 @@ class SchemaIdempotencyTest {
                 "schema/04-payment.sql",
                 "schema/05-cart.sql",
                 "schema/06-favorite.sql",
-                "schema/07-shipping.sql"
+                "schema/07-shipping.sql",
+                "schema/08-after-sales.sql"
         };
         try (Connection connection = dataSource.getConnection()) {
             for (int round = 0; round < 2; round++) {
@@ -86,11 +87,12 @@ class SchemaIdempotencyTest {
             }
         }
 
-        // 1. 十一张业务表齐全，含迭代 4 的购物车、收藏、订单明细和回补台账。
+        // 1. 业务表齐全，包含售后申请和图片。
         List<String> tables = jdbcTemplate.queryForList(
                 "SELECT name FROM sqlite_master WHERE type = 'table' "
                         + "AND name NOT LIKE 'sqlite_%' ORDER BY name", String.class);
-        assertEquals(List.of("buyer", "buyer_address", "cart", "category", "favorite", "intent",
+        assertEquals(List.of("after_sales_image", "after_sales_request", "buyer", "buyer_address",
+                "cart", "category", "favorite", "intent",
                 "order_item", "payment", "product", "product_image", "seller", "shipment",
                 "stock_restore"), tables);
 

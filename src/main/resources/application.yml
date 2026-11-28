@@ -40,7 +40,7 @@ spring:
 
   # ------------------------------------------------------------------
   # T2-03 建表脚本：每次启动执行，全部 IF NOT EXISTS，可重复执行
-  # 按模块拆分，按 00 到 06 的顺序加载：
+  # 按模块拆分，按编号顺序加载：
   #   00-base 基础层（seller，胡成溯）
   #   01-buyer 买家账号（胡成溯）
   #   02-product 商品中心（黄程宇）
@@ -49,7 +49,7 @@ spring:
   #   05-cart 购物车（胡成溯，挑战需求 B.2.2 / B.2.3）
   #   06-favorite 收藏（黄程宇，挑战需求 B.2.1 / B.2.4）
   #   07-shipping 配送（胡成溯，挑战需求 C.2：地址簿 + 发货记录）
-  # 购物车、收藏、配送均依赖买家和订单表。
+  #   08-after-sales 售后（黄程宇，挑战需求 C.3）
   # ------------------------------------------------------------------
   sql:
     init:
@@ -63,6 +63,7 @@ spring:
         - classpath:schema/05-cart.sql
         - classpath:schema/06-favorite.sql
         - classpath:schema/07-shipping.sql
+        - classpath:schema/08-after-sales.sql
       encoding: UTF-8
       continue-on-error: false
 

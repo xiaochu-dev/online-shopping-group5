@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{portal/fragments :: head('售后详情')}"></head>
+<body>
+<th:block th:if="${sellerView}">
+    <div th:replace="~{fragments/layout :: topbar('after-sales')}"></div>
+</th:block>
+<th:block th:unless="${sellerView}">
+    <div th:replace="~{portal/fragments :: buyerTopbar('after-sales')}"></div>
+</th:block>
+<main class="container">
+    <a th:href="@{${basePath}}" th:text="${sellerView ? '返回售后管理' : '返回我的售后'}"></a>
+    <h2 th:text="${claim.title()}" style="overflow-wrap:anywhere">售后详情</h2>
+    <p class="banner banner-ok" role="status" th:if="${message}" th:text="${message}"></p>
+    <p class="banner banner-error" role="alert" th:if="${error}" th:text="${error}"></p>
+
+    <section class="card">
+        <span class="tag" th:classappend="${claim.resolvedAt() != null ? 'tag-green' : 'tag-gray'}"
+              th:text="${claim.stateLabel()}"></span>
+        <p>
+            <strong th:text="${claim.productName()}"></strong>
+            <span class="muted" th:text="'订单 ' + ${claim.orderLabel()}"></span>
+        </p>
+        <p class="muted" th:text="'提交于 ' + ${claim.createdAtText()}"></p>
+        <h3>问题描述</h3>
+        <p th:text="${claim.description()}" style="white-space:pre-wrap; overflow-wrap:anywhere"></p>
+        <div th:if="${!images.isEmpty()}">
+            <h3>凭证图片</h3>
+            <div style="display:flex; flex-wrap:wrap; gap:12px">
+                <a th:each="imageId, index : ${images}"
+                   th:href="@{|${basePath}/${claim.id()}/images/${imageId}|}">
+                    <img th:src="@{|${basePath}/${claim.id()}/images/${imageId}|}"
+                         th:alt="'凭证图片 ' + ${index.count}" loading="lazy"
+                         style="display:block; width:128px; height:128px; object-fit:contain; background:#f4f6f8">
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <section class="card" th:if="${sellerView}">
+        <h3>联系买家</h3>
+        <p>
+            <span th:text="${claim.buyerName()}"></span>
+            <span th:text="${#strings.isEmpty(claim.phone()) ? '未留联系电话' : claim.phone()}"></span>
+        </p>
+        <div th:if="${claim.resolvedAt() == null and claim.negotiatingAt() == null}">
+            <p class="muted">通过下单电话与买家线下协商，可在这里更新协商进度。</p>
+            <form method="post" th:action="@{/admin/after-sales/{id}/negotiate(id=${claim.id()})}">
+                <button class="btn btn-primary" type="submit">开始协商</button>
+            </form>
+        </div>
+    </section>
+
+    <section class="card" th:if="${claim.negotiatingAt() != null or !sellerView}">
+        <h3>处理进度</h3>
+        <p th:if="${claim.negotiatingAt() == null}">申请已提交，等待商家联系。</p>
+        <p th:if="${claim.negotiatingAt() != null}" class="muted"
+           th:text="'开始协商 · ' + ${claim.negotiatingAtText()}"></p>
+        <div th:if="${claim.resolvedAt() != null}">
+            <p><strong th:text="${claim.outcome().label()}"></strong>
+                <span class="muted" th:text="'登记于 ' + ${claim.resolvedAtText()}"></span></p>
+            <p th:text="${claim.resolutionNote()}" style="white-space:pre-wrap; overflow-wrap:anywhere"></p>
+        </div>
+        <p th:if="${!sellerView and claim.negotiatingAt() != null and claim.resolvedAt() == null}">
+            商家正在跟进，登记结果后可在这里查看。
+        </p>
+
+        <form th:if="${sellerView and claim.resolvedAt() == null}" method="post"
+              th:action="@{/admin/after-sales/{id}/resolve(id=${claim.id()})}">
+            <p class="muted">线下协商或处理完成后，在这里登记结果。</p>
+            <div class="form-row">
+                <label for="outcome">处理结果</label>
+                <select id="outcome" name="outcome" required>
+                    <option value="">选择处理结果</option>
+                    <option th:each="option : ${outcomes}" th:value="${option.name()}" th:text="${option.label()}"
+                            th:selected="${option.name() == selectedOutcome}"></option>
+                </select>
+            </div>
+            <div class="form-row">
+                <label for="note">处理说明</label>
+                <textarea id="note" name="note" required maxlength="1000" rows="4"
+                          placeholder="填写双方约定、退货安排或退款金额等" th:text="${note}"></textarea>
+            </div>
+            <button class="btn btn-primary" type="submit">登记并结束</button>
+        </form>
+    </section>
+</main>
+</body>
+</html>
